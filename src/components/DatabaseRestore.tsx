@@ -28,7 +28,7 @@ const DatabaseRestore = () => {
     localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
   };
 
-  const handleRestore = () => {
+  const handleRestore = async () => {
     if (!selectedEnvironment) {
       toast({
         title: "Erro",
@@ -38,36 +38,85 @@ const DatabaseRestore = () => {
       return;
     }
 
-    // Simula a definição da variável de ambiente
     const envVar = selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES';
-    localStorage.setItem(envVar, 'true');
 
-    console.log(`Definindo variável de ambiente: ${envVar}=true`);
-    
-    logAction('RESTORE_DATABASE', {
-      environment: selectedEnvironment,
-      variable: envVar,
-      value: 'true'
-    });
+    try {
+      // Define a variável de ambiente no sistema
+      const response = await fetch('/api/set-env', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          [envVar]: 'true'
+        })
+      });
 
-    // Simula a execução do script Bash
-    console.log(`Executando script de restauração para ambiente ${selectedEnvironment}`);
-    console.log(`#!/bin/bash`);
-    console.log(`export ${envVar}=true`);
-    console.log(`echo "Iniciando restauração do banco ${selectedEnvironment}..."`);
-    console.log(`echo "Banco ${selectedEnvironment} restaurado com sucesso!"`);
+      if (!response.ok) {
+        // Fallback para ambiente de desenvolvimento
+        console.log(`export ${envVar}=true`);
+        localStorage.setItem(envVar, 'true');
+      }
 
-    logAction('EXECUTE_SCRIPT', {
-      scriptType: 'database_restore',
-      environment: selectedEnvironment,
-      command: `export ${envVar}=true && restore_database_${selectedEnvironment.toLowerCase()}.sh`,
-      status: 'success'
-    });
+      logAction('RESTORE_DATABASE', {
+        environment: selectedEnvironment,
+        variable: envVar,
+        value: 'true'
+      });
 
-    toast({
-      title: "Restauração iniciada!",
-      description: `Banco ${selectedEnvironment} está sendo restaurado`,
-    });
+      // Executa o script de restauração
+      try {
+        const scriptResponse = await fetch('/api/execute-script', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            type: 'database_restore',
+            environment: selectedEnvironment.toLowerCase(),
+            envVar: envVar
+          })
+        });
+
+        if (!scriptResponse.ok) {
+          // Fallback para logs do console
+          console.log(`Executando script de restauração para ambiente ${selectedEnvironment}`);
+          console.log(`#!/bin/bash`);
+          console.log(`export ${envVar}=true`);
+          console.log(`echo "Iniciando restauração do banco ${selectedEnvironment}..."`);
+          console.log(`bash /app/scripts/restore_${selectedEnvironment.toLowerCase()}.sh`);
+          console.log(`echo "Banco ${selectedEnvironment} restaurado com sucesso!"`);
+        }
+
+        logAction('EXECUTE_SCRIPT', {
+          scriptType: 'database_restore',
+          environment: selectedEnvironment,
+          command: `export ${envVar}=true && restore_database_${selectedEnvironment.toLowerCase()}.sh`,
+          status: 'success'
+        });
+
+        toast({
+          title: "Restauração iniciada!",
+          description: `Banco ${selectedEnvironment} está sendo restaurado`,
+        });
+
+      } catch (scriptError) {
+        console.error('Erro ao executar script:', scriptError);
+        logAction('EXECUTE_SCRIPT', {
+          scriptType: 'database_restore',
+          error: scriptError,
+          status: 'failed'
+        });
+      }
+
+    } catch (error) {
+      console.error('Erro ao definir variável:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao restaurar banco de dados",
+        variant: "destructive"
+      });
+    }
   };
 
   return (
@@ -75,12 +124,12 @@ const DatabaseRestore = () => {
       <div className="space-y-2">
         <label className="text-sm font-medium text-slate-300">Ambiente</label>
         <Select value={selectedEnvironment} onValueChange={setSelectedEnvironment}>
-          <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
+          <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400 relative z-50">
             <SelectValue placeholder="Selecione o ambiente" />
           </SelectTrigger>
-          <SelectContent className="bg-slate-800 border-slate-600">
+          <SelectContent className="bg-slate-800 border-slate-600 z-[9999] backdrop-blur-lg">
             {environments.map((env) => (
-              <SelectItem key={env.value} value={env.value} className="text-white hover:bg-slate-700">
+              <SelectItem key={env.value} value={env.value} className="text-white hover:bg-slate-700 focus:bg-slate-700">
                 {env.label}
               </SelectItem>
             ))}

@@ -16,6 +16,7 @@ interface DashboardProps {
 
 const Dashboard = ({ onLogout }: DashboardProps) => {
   const currentUser = localStorage.getItem('currentUser') || 'admin';
+  const isAdmin = currentUser === 'admin';
 
   const handleLogout = () => {
     const logEntry = {
@@ -45,7 +46,7 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
               PAINEL DE CONTROLE
             </h1>
             <p className="text-sm text-slate-400">
-              🐳 Docker | Usuário: {currentUser}
+              🐳 Docker | Usuário: {currentUser} {isAdmin && '(Admin)'}
             </p>
           </div>
           <Button 
@@ -61,12 +62,18 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
 
       {/* Main Content */}
       <div className="relative z-10 container mx-auto px-4 py-8">
-        <Tabs defaultValue="operations" className="w-full">
-          <TabsList className="grid w-full grid-cols-4 bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30">
-            <TabsTrigger value="operations" className="data-[state=active]:bg-cyan-500/20">
+        <Tabs defaultValue="date" className="w-full">
+          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30`}>
+            <TabsTrigger value="date" className="data-[state=active]:bg-cyan-500/20">
               <Calendar className="w-4 h-4 mr-2" />
-              Operações
+              Data
             </TabsTrigger>
+            {isAdmin && (
+              <TabsTrigger value="database" className="data-[state=active]:bg-cyan-500/20">
+                <Database className="w-4 h-4 mr-2" />
+                Banco
+              </TabsTrigger>
+            )}
             <TabsTrigger value="scripts" className="data-[state=active]:bg-cyan-500/20">
               <Upload className="w-4 h-4 mr-2" />
               Scripts
@@ -81,42 +88,42 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="operations" className="mt-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-              {/* Date Selector */}
-              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-xl text-cyan-400 flex items-center">
-                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                    Configuração de Data
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DateSelector />
-                </CardContent>
-              </Card>
+          <TabsContent value="date" className="mt-6">
+            <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
+              <CardHeader>
+                <CardTitle className="text-xl text-cyan-400 flex items-center">
+                  <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
+                  Configuração de Data
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <DateSelector />
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-              {/* Database Restore */}
+          {isAdmin && (
+            <TabsContent value="database" className="mt-6">
               <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
                 <CardHeader>
                   <CardTitle className="text-xl text-cyan-400 flex items-center">
                     <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                    Restauração de Banco
+                    Restauração de Banco (Admin)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <DatabaseRestore />
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
+            </TabsContent>
+          )}
 
           <TabsContent value="scripts" className="mt-6">
             <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
               <CardHeader>
                 <CardTitle className="text-xl text-cyan-400 flex items-center">
                   <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                  Upload de Scripts de Administração
+                  Scripts de Administração
                 </CardTitle>
               </CardHeader>
               <CardContent>
