@@ -13,6 +13,21 @@ const DatabaseRestore = () => {
     { value: 'TESTES', label: 'Testes (TESTES)' }
   ];
 
+  const logAction = (action: string, details: any) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      action,
+      details,
+      user: localStorage.getItem('currentUser') || 'admin'
+    };
+    
+    console.log('DATABASE_RESTORE_LOG:', JSON.stringify(logEntry));
+    
+    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+    logs.push(logEntry);
+    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+  };
+
   const handleRestore = () => {
     if (!selectedEnvironment) {
       toast({
@@ -27,8 +42,27 @@ const DatabaseRestore = () => {
     const envVar = selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES';
     localStorage.setItem(envVar, 'true');
 
+    console.log(`Definindo variável de ambiente: ${envVar}=true`);
+    
+    logAction('RESTORE_DATABASE', {
+      environment: selectedEnvironment,
+      variable: envVar,
+      value: 'true'
+    });
+
     // Simula a execução do script Bash
     console.log(`Executando script de restauração para ambiente ${selectedEnvironment}`);
+    console.log(`#!/bin/bash`);
+    console.log(`export ${envVar}=true`);
+    console.log(`echo "Iniciando restauração do banco ${selectedEnvironment}..."`);
+    console.log(`echo "Banco ${selectedEnvironment} restaurado com sucesso!"`);
+
+    logAction('EXECUTE_SCRIPT', {
+      scriptType: 'database_restore',
+      environment: selectedEnvironment,
+      command: `export ${envVar}=true && restore_database_${selectedEnvironment.toLowerCase()}.sh`,
+      status: 'success'
+    });
 
     toast({
       title: "Restauração iniciada!",

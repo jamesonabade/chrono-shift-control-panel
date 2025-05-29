@@ -14,22 +14,42 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [password, setPassword] = useState('');
   const { toast } = useToast();
 
+  const logAction = (action: string, details: any) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      action,
+      details,
+      user: username || 'unknown'
+    };
+    
+    console.log('AUTH_LOG:', JSON.stringify(logEntry));
+    
+    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+    logs.push(logEntry);
+    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Credenciais armazenadas localmente
-    const validCredentials = {
-      username: 'admin',
-      password: 'admin123'
-    };
+    // Credenciais padrão + usuários criados
+    const defaultCredentials = { admin: 'admin123' };
+    const userCredentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+    const allCredentials = { ...defaultCredentials, ...userCredentials };
 
-    if (username === validCredentials.username && password === validCredentials.password) {
+    if (allCredentials[username] && allCredentials[username] === password) {
+      localStorage.setItem('currentUser', username);
       onLogin();
+      
+      logAction('LOGIN_SUCCESS', { username });
+      
       toast({
         title: "Login realizado com sucesso!",
-        description: "Bem-vindo ao Sistema de Gerenciamento de Eventos"
+        description: `Bem-vindo ao Sistema de Gerenciamento de Eventos, ${username}!`
       });
     } else {
+      logAction('LOGIN_FAILED', { username, reason: 'invalid_credentials' });
+      
       toast({
         title: "Erro de autenticação",
         description: "Usuário ou senha incorretos",
@@ -48,6 +68,9 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             SISTEMA DE EVENTOS
           </CardTitle>
           <p className="text-slate-400 text-sm">Gerenciamento Futurístico</p>
+          <div className="text-xs text-cyan-400 bg-slate-700/50 px-2 py-1 rounded-full inline-block">
+            🐳 Docker Ready
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
@@ -81,7 +104,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
             </Button>
           </form>
           <div className="mt-6 text-center text-xs text-slate-500">
-            <p>Usuário: admin | Senha: admin123</p>
+            <p>Usuário padrão: admin | Senha: admin123</p>
           </div>
         </CardContent>
       </Card>

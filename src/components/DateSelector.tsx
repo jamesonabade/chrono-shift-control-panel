@@ -9,21 +9,36 @@ const DateSelector = () => {
   const [selectedMonth, setSelectedMonth] = useState<string>('');
   const { toast } = useToast();
 
-  const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const days = Array.from({ length: 31 }, (_, i) => i + 1);
   const months = [
-    { value: '01', label: 'Janeiro' },
-    { value: '02', label: 'Fevereiro' },
-    { value: '03', label: 'Março' },
-    { value: '04', label: 'Abril' },
-    { value: '05', label: 'Maio' },
-    { value: '06', label: 'Junho' },
-    { value: '07', label: 'Julho' },
-    { value: '08', label: 'Agosto' },
-    { value: '09', label: 'Setembro' },
+    { value: '1', label: 'Janeiro' },
+    { value: '2', label: 'Fevereiro' },
+    { value: '3', label: 'Março' },
+    { value: '4', label: 'Abril' },
+    { value: '5', label: 'Maio' },
+    { value: '6', label: 'Junho' },
+    { value: '7', label: 'Julho' },
+    { value: '8', label: 'Agosto' },
+    { value: '9', label: 'Setembro' },
     { value: '10', label: 'Outubro' },
     { value: '11', label: 'Novembro' },
     { value: '12', label: 'Dezembro' }
   ];
+
+  const logAction = (action: string, details: any) => {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      action,
+      details,
+      user: localStorage.getItem('currentUser') || 'admin'
+    };
+    
+    console.log('DATE_SELECTOR_LOG:', JSON.stringify(logEntry));
+    
+    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+    logs.push(logEntry);
+    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+  };
 
   const handleApply = () => {
     if (!selectedDay || !selectedMonth) {
@@ -35,16 +50,39 @@ const DateSelector = () => {
       return;
     }
 
-    // Simula a definição das variáveis de ambiente
+    // Define as variáveis de ambiente
+    const dayVar = `VARIAVEL_DIA=${selectedDay}`;
+    const monthVar = `VARIAVEL_MES=${selectedMonth}`;
+    
+    // Simula a definição das variáveis
     localStorage.setItem('VARIAVEL_DIA', selectedDay);
     localStorage.setItem('VARIAVEL_MES', selectedMonth);
 
+    console.log(`Definindo variáveis de ambiente: ${dayVar}, ${monthVar}`);
+    
+    logAction('SET_DATE_VARIABLES', {
+      day: selectedDay,
+      month: selectedMonth,
+      monthName: months.find(m => m.value === selectedMonth)?.label,
+      variables: { VARIAVEL_DIA: selectedDay, VARIAVEL_MES: selectedMonth }
+    });
+
     // Simula a execução do script Bash
-    console.log(`Executando script com VARIAVEL_DIA=${selectedDay} e VARIAVEL_MES=${selectedMonth}`);
+    console.log('Executando script de aplicação de data...');
+    console.log(`#!/bin/bash`);
+    console.log(`export VARIAVEL_DIA=${selectedDay}`);
+    console.log(`export VARIAVEL_MES=${selectedMonth}`);
+    console.log(`echo "Data configurada: ${selectedDay}/${selectedMonth}"`);
+
+    logAction('EXECUTE_SCRIPT', {
+      scriptType: 'date_script',
+      command: `export VARIAVEL_DIA=${selectedDay} && export VARIAVEL_MES=${selectedMonth}`,
+      status: 'success'
+    });
 
     toast({
-      title: "Data aplicada com sucesso!",
-      description: `Dia: ${selectedDay}, Mês: ${months.find(m => m.value === selectedMonth)?.label}`,
+      title: "Data aplicada!",
+      description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
     });
   };
 
@@ -59,7 +97,7 @@ const DateSelector = () => {
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-600">
               {days.map((day) => (
-                <SelectItem key={day} value={day} className="text-white hover:bg-slate-700">
+                <SelectItem key={day} value={day.toString()} className="text-white hover:bg-slate-700">
                   {day}
                 </SelectItem>
               ))}
@@ -95,7 +133,7 @@ const DateSelector = () => {
       {selectedDay && selectedMonth && (
         <div className="p-4 bg-slate-700/30 rounded-lg border border-cyan-500/30">
           <p className="text-sm text-slate-300">
-            Variáveis de ambiente que serão definidas:
+            Variáveis que serão definidas:
           </p>
           <ul className="mt-2 text-xs text-cyan-400">
             <li>VARIAVEL_DIA = {selectedDay}</li>

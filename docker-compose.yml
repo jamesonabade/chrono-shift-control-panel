@@ -1,0 +1,27 @@
+
+version: '3.8'
+
+services:
+  event-management:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=development
+      - VITE_APP_ENV=docker
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./scripts:/app/scripts
+      - ./logs:/app/logs
+      - app_data:/app/data
+    command: npm run dev -- --host 0.0.0.0 --port 8080
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  app_data:
