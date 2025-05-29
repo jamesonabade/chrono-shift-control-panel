@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, FileText, Trash2 } from 'lucide-react';
+import { Upload, Download, FileText, Trash2, Play } from 'lucide-react';
 
 interface UploadedScript {
   name: string;
@@ -22,19 +22,18 @@ const ScriptUpload = () => {
 
   const loadUploadedScripts = async () => {
     try {
-      const response = await fetch('/api/scripts');
+      const response = await fetch('http://localhost:3001/api/scripts');
       if (response.ok) {
         const scripts = await response.json();
         setUploadedScripts(scripts);
-      } else {
-        // Fallback para localStorage
-        const saved = localStorage.getItem('uploadedScripts');
-        if (saved) {
-          setUploadedScripts(JSON.parse(saved));
-        }
       }
     } catch (error) {
       console.error('Erro ao carregar scripts:', error);
+      // Fallback para localStorage
+      const saved = localStorage.getItem('uploadedScripts');
+      if (saved) {
+        setUploadedScripts(JSON.parse(saved));
+      }
     }
   };
 
@@ -53,58 +52,24 @@ const ScriptUpload = () => {
       formData.append('script', file);
       formData.append('type', type);
 
-      const response = await fetch('/api/upload-script', {
+      const response = await fetch('http://localhost:3001/api/upload-script', {
         method: 'POST',
         body: formData
       });
 
       if (response.ok) {
         const result = await response.json();
-        console.log('Script salvo:', result.path);
+        console.log('Script salvo no servidor:', result.path);
         
-        // Adiciona à lista
-        const newScript: UploadedScript = {
-          name: file.name,
-          type,
-          size: file.size,
-          uploadDate: new Date().toISOString()
-        };
-        
-        const updatedScripts = [...uploadedScripts, newScript];
-        setUploadedScripts(updatedScripts);
-        
-        // Salva no localStorage como backup
-        localStorage.setItem('uploadedScripts', JSON.stringify(updatedScripts));
-
         toast({
           title: "Script enviado!",
           description: `${file.name} foi salvo em /app/scripts/`,
         });
 
+        // Recarrega a lista
+        await loadUploadedScripts();
       } else {
-        // Fallback para localStorage apenas
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          localStorage.setItem(`${type}Script`, e.target?.result as string);
-          localStorage.setItem(`${type}ScriptName`, file.name);
-          
-          const newScript: UploadedScript = {
-            name: file.name,
-            type,
-            size: file.size,
-            uploadDate: new Date().toISOString()
-          };
-          
-          const updatedScripts = [...uploadedScripts, newScript];
-          setUploadedScripts(updatedScripts);
-          localStorage.setItem('uploadedScripts', JSON.stringify(updatedScripts));
-          
-          toast({
-            title: "Script armazenado localmente!",
-            description: `${file.name} foi armazenado no navegador`,
-          });
-        };
-        reader.readAsText(file);
+        throw new Error('Falha no upload do script');
       }
 
     } catch (error) {
@@ -119,7 +84,7 @@ const ScriptUpload = () => {
 
   const handleDownload = async (script: UploadedScript) => {
     try {
-      const response = await fetch(`/api/download-script/${script.name}`);
+      const response = await fetch(`http://localhost:3001/api/download-script/${script.name}`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -130,20 +95,13 @@ const ScriptUpload = () => {
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
+        
+        toast({
+          title: "Download concluído!",
+          description: `${script.name} foi baixado`,
+        });
       } else {
-        // Fallback para localStorage
-        const content = localStorage.getItem(`${script.type}Script`);
-        if (content) {
-          const blob = new Blob([content], { type: 'text/plain' });
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = script.name;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        }
+        throw new Error('Falha no download');
       }
     } catch (error) {
       console.error('Erro no download:', error);
@@ -157,25 +115,65 @@ const ScriptUpload = () => {
 
   const handleDelete = async (script: UploadedScript) => {
     try {
-      const response = await fetch(`/api/delete-script/${script.name}`, {
+      const response = await fetch(`http://localhost:3001/api/delete-script/${script.name}`, {
         method: 'DELETE'
       });
 
-      const updatedScripts = uploadedScripts.filter(s => s.name !== script.name);
-      setUploadedScripts(updatedScripts);
-      localStorage.setItem('uploadedScripts', JSON.stringify(updatedScripts));
+      if (response.ok) {
+        toast({
+          title: "Script removido!",
+          description: `${script.name} foi removido`,
+        });
 
-      // Remove do localStorage também
-      localStorage.removeItem(`${script.type}Script`);
-      localStorage.removeItem(`${script.type}ScriptName`);
-
-      toast({
-        title: "Script removido!",
-        description: `${script.name} foi removido`,
-      });
-
+        // Recarrega a lista
+        await loadUploadedScripts();
+      } else {
+        throw new Error('Falha ao deletar script');
+      }
     } catch (error) {
       console.error('Erro ao deletar:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao remover script",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleExecute = async (script: UploadedScript) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/execute-script', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          scriptName: script.name,
+          environment: {}
+        })
+      });
+
+      const result = await response.json();
+      
+      if (result.success) {
+        toast({
+          title: "Script executado!",
+          description: `${script.name} foi executado com sucesso`,
+        });
+      } else {
+        toast({
+          title: "Erro na execução",
+          description: `Falha ao executar ${script.name}`,
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Erro na execução:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao executar script",
+        variant: "destructive"
+      });
     }
   };
 
@@ -228,7 +226,17 @@ const ScriptUpload = () => {
 
       {/* Uploaded Scripts List */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-purple-400">Scripts Enviados</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-purple-400">Scripts Enviados</h3>
+          <Button
+            onClick={loadUploadedScripts}
+            variant="outline"
+            size="sm"
+            className="border-purple-500/50 text-purple-400 hover:bg-purple-500/20"
+          >
+            Atualizar Lista
+          </Button>
+        </div>
         
         {uploadedScripts.length === 0 ? (
           <div className="p-6 bg-slate-700/30 rounded-lg border border-slate-600/30 text-center">
@@ -252,10 +260,20 @@ const ScriptUpload = () => {
                 </div>
                 <div className="flex space-x-2">
                   <Button
+                    onClick={() => handleExecute(script)}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                    title="Executar Script"
+                  >
+                    <Play className="w-4 h-4" />
+                  </Button>
+                  <Button
                     onClick={() => handleDownload(script)}
                     variant="outline"
                     size="sm"
                     className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
+                    title="Baixar Script"
                   >
                     <Download className="w-4 h-4" />
                   </Button>
@@ -264,6 +282,7 @@ const ScriptUpload = () => {
                     variant="outline"
                     size="sm"
                     className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                    title="Remover Script"
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>

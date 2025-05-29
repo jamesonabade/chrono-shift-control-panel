@@ -52,7 +52,7 @@ const DateSelector = () => {
 
     try {
       // Define as variáveis de ambiente no sistema
-      const response = await fetch('/api/set-env', {
+      const response = await fetch('http://localhost:3001/api/set-env', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -64,67 +64,72 @@ const DateSelector = () => {
       });
 
       if (!response.ok) {
-        // Fallback para ambiente de desenvolvimento
-        console.log(`export VARIAVEL_DIA=${selectedDay}`);
-        console.log(`export VARIAVEL_MES=${selectedMonth}`);
-        
-        // Simula a definição das variáveis localmente
-        localStorage.setItem('VARIAVEL_DIA', selectedDay);
-        localStorage.setItem('VARIAVEL_MES', selectedMonth);
+        throw new Error('Falha ao definir variáveis de ambiente');
       }
+
+      const result = await response.json();
 
       logAction('SET_DATE_VARIABLES', {
         day: selectedDay,
         month: selectedMonth,
         monthName: months.find(m => m.value === selectedMonth)?.label,
-        variables: { VARIAVEL_DIA: selectedDay, VARIAVEL_MES: selectedMonth }
+        variables: { VARIAVEL_DIA: selectedDay, VARIAVEL_MES: selectedMonth },
+        envFile: result.envFile
       });
 
-      // Executa o script de data
+      // Executa script de data se existir
       try {
-        const scriptResponse = await fetch('/api/execute-script', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'date_script',
-            environment: {
-              VARIAVEL_DIA: selectedDay,
-              VARIAVEL_MES: selectedMonth
+        const scriptsResponse = await fetch('http://localhost:3001/api/scripts');
+        if (scriptsResponse.ok) {
+          const scripts = await scriptsResponse.json();
+          const dateScript = scripts.find((s: any) => s.type === 'date');
+          
+          if (dateScript) {
+            const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                scriptName: dateScript.name,
+                environment: {
+                  VARIAVEL_DIA: selectedDay,
+                  VARIAVEL_MES: selectedMonth
+                }
+              })
+            });
+
+            const executeResult = await executeResponse.json();
+            
+            if (executeResult.success) {
+              logAction('EXECUTE_DATE_SCRIPT', {
+                scriptName: dateScript.name,
+                output: executeResult.output,
+                logFile: executeResult.logFile,
+                status: 'success'
+              });
+            } else {
+              logAction('EXECUTE_DATE_SCRIPT', {
+                scriptName: dateScript.name,
+                error: executeResult.error,
+                logFile: executeResult.logFile,
+                status: 'failed'
+              });
             }
-          })
-        });
-
-        if (!scriptResponse.ok) {
-          // Fallback para logs do console
-          console.log('Executando script de aplicação de data...');
-          console.log(`#!/bin/bash`);
-          console.log(`export VARIAVEL_DIA=${selectedDay}`);
-          console.log(`export VARIAVEL_MES=${selectedMonth}`);
-          console.log(`echo "Data configurada: ${selectedDay}/${selectedMonth}"`);
-          console.log('bash /app/scripts/date_script.sh');
+          }
         }
-
-        logAction('EXECUTE_SCRIPT', {
-          scriptType: 'date_script',
-          command: `export VARIAVEL_DIA=${selectedDay} && export VARIAVEL_MES=${selectedMonth}`,
-          status: 'success'
-        });
-
-        toast({
-          title: "Data aplicada!",
-          description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
-        });
-
       } catch (scriptError) {
         console.error('Erro ao executar script:', scriptError);
-        logAction('EXECUTE_SCRIPT', {
-          scriptType: 'date_script',
+        logAction('EXECUTE_DATE_SCRIPT', {
           error: scriptError,
-          status: 'failed'
+          status: 'script_not_found'
         });
       }
+
+      toast({
+        title: "Data aplicada!",
+        description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
+      });
 
     } catch (error) {
       console.error('Erro ao definir variáveis:', error);
@@ -142,10 +147,10 @@ const DateSelector = () => {
         <div className="space-y-2">
           <label className="text-sm font-medium text-slate-300">Dia</label>
           <Select value={selectedDay} onValueChange={setSelectedDay}>
-            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400 relative z-50">
+            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
               <SelectValue placeholder="Selecione o dia" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600 z-[9999] backdrop-blur-lg">
+            <SelectContent className="bg-slate-800 border-slate-600 z-[100] backdrop-blur-xl shadow-2xl">
               {days.map((day) => (
                 <SelectItem key={day} value={day.toString()} className="text-white hover:bg-slate-700 focus:bg-slate-700">
                   {day}
@@ -158,10 +163,10 @@ const DateSelector = () => {
         <div className="space-y-2">
           <label className="text-sm font-medium text-slate-300">Mês</label>
           <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400 relative z-50">
+            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
               <SelectValue placeholder="Selecione o mês" />
             </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600 z-[9999] backdrop-blur-lg">
+            <SelectContent className="bg-slate-800 border-slate-600 z-[100] backdrop-blur-xl shadow-2xl">
               {months.map((month) => (
                 <SelectItem key={month.value} value={month.value} className="text-white hover:bg-slate-700 focus:bg-slate-700">
                   {month.label}

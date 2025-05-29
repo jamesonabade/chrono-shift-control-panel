@@ -42,68 +42,98 @@ const DatabaseRestore = () => {
 
     try {
       // Define a variável de ambiente no sistema
-      const response = await fetch('/api/set-env', {
+      const response = await fetch('http://localhost:3001/api/set-env', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          [envVar]: 'true'
+          [envVar]: 'true',
+          ENVIRONMENT: selectedEnvironment
         })
       });
 
       if (!response.ok) {
-        // Fallback para ambiente de desenvolvimento
-        console.log(`export ${envVar}=true`);
-        localStorage.setItem(envVar, 'true');
+        throw new Error('Falha ao definir variáveis de ambiente');
       }
+
+      const result = await response.json();
 
       logAction('RESTORE_DATABASE', {
         environment: selectedEnvironment,
         variable: envVar,
-        value: 'true'
+        value: 'true',
+        envFile: result.envFile
       });
 
       // Executa o script de restauração
       try {
-        const scriptResponse = await fetch('/api/execute-script', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            type: 'database_restore',
-            environment: selectedEnvironment.toLowerCase(),
-            envVar: envVar
-          })
-        });
+        const scriptsResponse = await fetch('http://localhost:3001/api/scripts');
+        if (scriptsResponse.ok) {
+          const scripts = await scriptsResponse.json();
+          const dbScript = scripts.find((s: any) => 
+            s.type === 'database' && 
+            (s.name.includes(selectedEnvironment.toLowerCase()) || s.name.includes('restore'))
+          );
+          
+          if (dbScript) {
+            const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                scriptName: dbScript.name,
+                environment: {
+                  [envVar]: 'true',
+                  ENVIRONMENT: selectedEnvironment
+                }
+              })
+            });
 
-        if (!scriptResponse.ok) {
-          // Fallback para logs do console
-          console.log(`Executando script de restauração para ambiente ${selectedEnvironment}`);
-          console.log(`#!/bin/bash`);
-          console.log(`export ${envVar}=true`);
-          console.log(`echo "Iniciando restauração do banco ${selectedEnvironment}..."`);
-          console.log(`bash /app/scripts/restore_${selectedEnvironment.toLowerCase()}.sh`);
-          console.log(`echo "Banco ${selectedEnvironment} restaurado com sucesso!"`);
+            const executeResult = await executeResponse.json();
+            
+            if (executeResult.success) {
+              logAction('EXECUTE_RESTORE_SCRIPT', {
+                scriptName: dbScript.name,
+                environment: selectedEnvironment,
+                output: executeResult.output,
+                logFile: executeResult.logFile,
+                status: 'success'
+              });
+
+              toast({
+                title: "Restauração concluída!",
+                description: `Banco ${selectedEnvironment} restaurado com sucesso`,
+              });
+            } else {
+              logAction('EXECUTE_RESTORE_SCRIPT', {
+                scriptName: dbScript.name,
+                environment: selectedEnvironment,
+                error: executeResult.error,
+                logFile: executeResult.logFile,
+                status: 'failed'
+              });
+
+              toast({
+                title: "Erro na restauração",
+                description: `Falha ao restaurar banco ${selectedEnvironment}`,
+                variant: "destructive"
+              });
+            }
+          } else {
+            toast({
+              title: "Script não encontrado",
+              description: `Nenhum script de restauração encontrado para ${selectedEnvironment}`,
+              variant: "destructive"
+            });
+          }
         }
-
-        logAction('EXECUTE_SCRIPT', {
-          scriptType: 'database_restore',
-          environment: selectedEnvironment,
-          command: `export ${envVar}=true && restore_database_${selectedEnvironment.toLowerCase()}.sh`,
-          status: 'success'
-        });
-
-        toast({
-          title: "Restauração iniciada!",
-          description: `Banco ${selectedEnvironment} está sendo restaurado`,
-        });
-
       } catch (scriptError) {
         console.error('Erro ao executar script:', scriptError);
-        logAction('EXECUTE_SCRIPT', {
+        logAction('EXECUTE_RESTORE_SCRIPT', {
           scriptType: 'database_restore',
+          environment: selectedEnvironment,
           error: scriptError,
           status: 'failed'
         });
@@ -124,10 +154,10 @@ const DatabaseRestore = () => {
       <div className="space-y-2">
         <label className="text-sm font-medium text-slate-300">Ambiente</label>
         <Select value={selectedEnvironment} onValueChange={setSelectedEnvironment}>
-          <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400 relative z-50">
+          <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
             <SelectValue placeholder="Selecione o ambiente" />
           </SelectTrigger>
-          <SelectContent className="bg-slate-800 border-slate-600 z-[9999] backdrop-blur-lg">
+          <SelectContent className="bg-slate-800 border-slate-600 z-[100] backdrop-blur-xl shadow-2xl">
             {environments.map((env) => (
               <SelectItem key={env.value} value={env.value} className="text-white hover:bg-slate-700 focus:bg-slate-700">
                 {env.label}
@@ -152,6 +182,7 @@ const DatabaseRestore = () => {
           </p>
           <ul className="mt-2 text-xs text-orange-400">
             <li>{selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES'} = true</li>
+            <li>ENVIRONMENT = {selectedEnvironment}</li>
           </ul>
         </div>
       )}
