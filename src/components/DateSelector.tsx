@@ -7,6 +7,7 @@ import { useToast } from '@/hooks/use-toast';
 const DateSelector = () => {
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedMonth, setSelectedMonth] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const days = Array.from({ length: 31 }, (_, i) => i + 1);
@@ -50,94 +51,101 @@ const DateSelector = () => {
       return;
     }
 
+    setIsLoading(true);
+
     try {
-      // Define as variáveis de ambiente no sistema
-      const response = await fetch('http://localhost:3001/api/set-env', {
+      // Verificar se existe script de data
+      const checkResponse = await fetch('http://localhost:3001/api/check-script/date');
+      const checkResult = await checkResponse.json();
+      
+      if (!checkResult.exists) {
+        toast({
+          title: "Script não encontrado",
+          description: "O script de alteração de data não foi carregado. Por favor, faça o upload do script na aba Scripts.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      // Definir variáveis de ambiente
+      const envVars = {
+        VARIAVEL_DIA: selectedDay,
+        VARIAVEL_MES: selectedMonth,
+        DIA_SELECIONADO: selectedDay,
+        MES_SELECIONADO: selectedMonth
+      };
+
+      const setEnvResponse = await fetch('http://localhost:3001/api/set-env', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(envVars)
+      });
+
+      if (!setEnvResponse.ok) {
+        throw new Error('Falha ao definir variáveis de ambiente');
+      }
+
+      // Executar script de data
+      const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          VARIAVEL_DIA: selectedDay,
-          VARIAVEL_MES: selectedMonth
+          scriptName: checkResult.script,
+          environment: envVars,
+          action: 'APLICAR_DATA'
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Falha ao definir variáveis de ambiente');
-      }
+      const executeResult = await executeResponse.json();
+      
+      if (executeResult.success) {
+        logAction('APPLY_DATE_SUCCESS', {
+          day: selectedDay,
+          month: selectedMonth,
+          monthName: months.find(m => m.value === selectedMonth)?.label,
+          script: checkResult.script,
+          variables: envVars
+        });
 
-      const result = await response.json();
+        toast({
+          title: "Data aplicada com sucesso!",
+          description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
+        });
+      } else {
+        logAction('APPLY_DATE_ERROR', {
+          day: selectedDay,
+          month: selectedMonth,
+          script: checkResult.script,
+          error: executeResult.error
+        });
 
-      logAction('SET_DATE_VARIABLES', {
-        day: selectedDay,
-        month: selectedMonth,
-        monthName: months.find(m => m.value === selectedMonth)?.label,
-        variables: { VARIAVEL_DIA: selectedDay, VARIAVEL_MES: selectedMonth },
-        envFile: result.envFile
-      });
-
-      // Executa script de data se existir
-      try {
-        const scriptsResponse = await fetch('http://localhost:3001/api/scripts');
-        if (scriptsResponse.ok) {
-          const scripts = await scriptsResponse.json();
-          const dateScript = scripts.find((s: any) => s.type === 'date');
-          
-          if (dateScript) {
-            const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                scriptName: dateScript.name,
-                environment: {
-                  VARIAVEL_DIA: selectedDay,
-                  VARIAVEL_MES: selectedMonth
-                }
-              })
-            });
-
-            const executeResult = await executeResponse.json();
-            
-            if (executeResult.success) {
-              logAction('EXECUTE_DATE_SCRIPT', {
-                scriptName: dateScript.name,
-                output: executeResult.output,
-                logFile: executeResult.logFile,
-                status: 'success'
-              });
-            } else {
-              logAction('EXECUTE_DATE_SCRIPT', {
-                scriptName: dateScript.name,
-                error: executeResult.error,
-                logFile: executeResult.logFile,
-                status: 'failed'
-              });
-            }
-          }
-        }
-      } catch (scriptError) {
-        console.error('Erro ao executar script:', scriptError);
-        logAction('EXECUTE_DATE_SCRIPT', {
-          error: scriptError,
-          status: 'script_not_found'
+        toast({
+          title: "Erro na execução",
+          description: executeResult.message || "Erro ao executar script de data",
+          variant: "destructive"
         });
       }
 
-      toast({
-        title: "Data aplicada!",
-        description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
+    } catch (error) {
+      console.error('Erro ao aplicar data:', error);
+      logAction('APPLY_DATE_FATAL_ERROR', {
+        day: selectedDay,
+        month: selectedMonth,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
       });
 
-    } catch (error) {
-      console.error('Erro ao definir variáveis:', error);
       toast({
         title: "Erro",
         description: "Erro ao aplicar configurações de data",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -180,9 +188,9 @@ const DateSelector = () => {
       <Button 
         onClick={handleApply}
         className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-cyan-500/30"
-        disabled={!selectedDay || !selectedMonth}
+        disabled={!selectedDay || !selectedMonth || isLoading}
       >
-        APLICAR DATA
+        {isLoading ? 'APLICANDO...' : 'APLICAR DATA'}
       </Button>
 
       {selectedDay && selectedMonth && (
@@ -193,6 +201,8 @@ const DateSelector = () => {
           <ul className="mt-2 text-xs text-cyan-400">
             <li>VARIAVEL_DIA = {selectedDay}</li>
             <li>VARIAVEL_MES = {selectedMonth}</li>
+            <li>DIA_SELECIONADO = {selectedDay}</li>
+            <li>MES_SELECIONADO = {selectedMonth}</li>
           </ul>
         </div>
       )}

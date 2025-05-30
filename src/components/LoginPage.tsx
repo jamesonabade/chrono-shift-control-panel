@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, X } from 'lucide-react';
+import { X } from 'lucide-react';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -15,7 +15,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [password, setPassword] = useState('');
   const [backgroundImage, setBackgroundImage] = useState(localStorage.getItem('loginBackground') || '');
   const [logo, setLogo] = useState(localStorage.getItem('loginLogo') || '');
-  const [showCustomization, setShowCustomization] = useState(false);
   const { toast } = useToast();
 
   const logAction = (action: string, details: any) => {
@@ -125,73 +124,6 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       
       {!backgroundImage && (
         <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDU5LCAxMzAsIDI0NiwgMC4xKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
-      )}
-      
-      {/* Botão de personalização */}
-      <Button
-        onClick={() => setShowCustomization(!showCustomization)}
-        className="absolute top-4 right-4 bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 hover:bg-slate-700/80 z-20"
-        variant="outline"
-        size="sm"
-      >
-        🎨 Personalizar
-      </Button>
-
-      {/* Painel de personalização */}
-      {showCustomization && (
-        <div className="absolute top-16 right-4 bg-slate-800/90 backdrop-blur-lg border border-cyan-500/30 rounded-lg p-4 space-y-4 z-20 min-w-[300px]">
-          <h3 className="text-white font-semibold">Personalização do Login</h3>
-          
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300">Papel de Parede</label>
-            <div className="flex gap-2">
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImageUpload(file, 'background');
-                }}
-                className="bg-slate-700/50 border-slate-600 text-white text-xs"
-              />
-              {backgroundImage && (
-                <Button
-                  onClick={() => removeImage('background')}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm text-slate-300">Logo</label>
-            <div className="flex gap-2">
-              <Input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleImageUpload(file, 'logo');
-                }}
-                className="bg-slate-700/50 border-slate-600 text-white text-xs"
-              />
-              {logo && (
-                <Button
-                  onClick={() => removeImage('logo')}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
       )}
       
       <Card className="w-full max-w-md bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-2xl shadow-cyan-500/20 relative z-10">

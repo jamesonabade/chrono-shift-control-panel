@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 
 const DatabaseRestore = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
+  const [isLoading, setIsLoading] = useState(false);
   const { toast } = useToast();
 
   const environments = [
@@ -38,114 +39,99 @@ const DatabaseRestore = () => {
       return;
     }
 
-    const envVar = selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES';
+    setIsLoading(true);
 
     try {
-      // Define a variável de ambiente no sistema
-      const response = await fetch('http://localhost:3001/api/set-env', {
+      // Verificar se existe script de banco
+      const checkResponse = await fetch('http://localhost:3001/api/check-script/database');
+      const checkResult = await checkResponse.json();
+      
+      if (!checkResult.exists) {
+        toast({
+          title: "Script não encontrado",
+          description: "O script de restauração de banco não foi carregado. Por favor, faça o upload do script na aba Scripts.",
+          variant: "destructive"
+        });
+        setIsLoading(false);
+        return;
+      }
+
+      const envVar = selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES';
+
+      // Definir variáveis de ambiente
+      const envVars = {
+        [envVar]: 'true',
+        ENVIRONMENT: selectedEnvironment,
+        DATABASE_ENV: selectedEnvironment,
+        RESTORE_TARGET: selectedEnvironment
+      };
+
+      const setEnvResponse = await fetch('http://localhost:3001/api/set-env', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(envVars)
+      });
+
+      if (!setEnvResponse.ok) {
+        throw new Error('Falha ao definir variáveis de ambiente');
+      }
+
+      // Executar script de restauração
+      const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          [envVar]: 'true',
-          ENVIRONMENT: selectedEnvironment
+          scriptName: checkResult.script,
+          environment: envVars,
+          action: 'RESTAURAR_BANCO'
         })
       });
 
-      if (!response.ok) {
-        throw new Error('Falha ao definir variáveis de ambiente');
-      }
-
-      const result = await response.json();
-
-      logAction('RESTORE_DATABASE', {
-        environment: selectedEnvironment,
-        variable: envVar,
-        value: 'true',
-        envFile: result.envFile
-      });
-
-      // Executa o script de restauração
-      try {
-        const scriptsResponse = await fetch('http://localhost:3001/api/scripts');
-        if (scriptsResponse.ok) {
-          const scripts = await scriptsResponse.json();
-          const dbScript = scripts.find((s: any) => 
-            s.type === 'database' && 
-            (s.name.includes(selectedEnvironment.toLowerCase()) || s.name.includes('restore'))
-          );
-          
-          if (dbScript) {
-            const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                scriptName: dbScript.name,
-                environment: {
-                  [envVar]: 'true',
-                  ENVIRONMENT: selectedEnvironment
-                }
-              })
-            });
-
-            const executeResult = await executeResponse.json();
-            
-            if (executeResult.success) {
-              logAction('EXECUTE_RESTORE_SCRIPT', {
-                scriptName: dbScript.name,
-                environment: selectedEnvironment,
-                output: executeResult.output,
-                logFile: executeResult.logFile,
-                status: 'success'
-              });
-
-              toast({
-                title: "Restauração concluída!",
-                description: `Banco ${selectedEnvironment} restaurado com sucesso`,
-              });
-            } else {
-              logAction('EXECUTE_RESTORE_SCRIPT', {
-                scriptName: dbScript.name,
-                environment: selectedEnvironment,
-                error: executeResult.error,
-                logFile: executeResult.logFile,
-                status: 'failed'
-              });
-
-              toast({
-                title: "Erro na restauração",
-                description: `Falha ao restaurar banco ${selectedEnvironment}`,
-                variant: "destructive"
-              });
-            }
-          } else {
-            toast({
-              title: "Script não encontrado",
-              description: `Nenhum script de restauração encontrado para ${selectedEnvironment}`,
-              variant: "destructive"
-            });
-          }
-        }
-      } catch (scriptError) {
-        console.error('Erro ao executar script:', scriptError);
-        logAction('EXECUTE_RESTORE_SCRIPT', {
-          scriptType: 'database_restore',
+      const executeResult = await executeResponse.json();
+      
+      if (executeResult.success) {
+        logAction('RESTORE_DATABASE_SUCCESS', {
           environment: selectedEnvironment,
-          error: scriptError,
-          status: 'failed'
+          script: checkResult.script,
+          variables: envVars
+        });
+
+        toast({
+          title: "Restauração concluída!",
+          description: `Banco ${selectedEnvironment} restaurado com sucesso`,
+        });
+      } else {
+        logAction('RESTORE_DATABASE_ERROR', {
+          environment: selectedEnvironment,
+          script: checkResult.script,
+          error: executeResult.error
+        });
+
+        toast({
+          title: "Erro na restauração",
+          description: executeResult.message || `Falha ao restaurar banco ${selectedEnvironment}`,
+          variant: "destructive"
         });
       }
 
     } catch (error) {
-      console.error('Erro ao definir variável:', error);
+      console.error('Erro ao restaurar banco:', error);
+      logAction('RESTORE_DATABASE_FATAL_ERROR', {
+        environment: selectedEnvironment,
+        error: error instanceof Error ? error.message : 'Erro desconhecido'
+      });
+
       toast({
         title: "Erro",
         description: "Erro ao restaurar banco de dados",
         variant: "destructive"
       });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -170,19 +156,21 @@ const DatabaseRestore = () => {
       <Button 
         onClick={handleRestore}
         className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold py-3 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-orange-500/30"
-        disabled={!selectedEnvironment}
+        disabled={!selectedEnvironment || isLoading}
       >
-        RESTAURAR BANCO
+        {isLoading ? 'RESTAURANDO...' : 'RESTAURAR BANCO'}
       </Button>
 
       {selectedEnvironment && (
         <div className="p-4 bg-slate-700/30 rounded-lg border border-orange-500/30">
           <p className="text-sm text-slate-300">
-            Variável de ambiente que será definida:
+            Variáveis de ambiente que serão definidas:
           </p>
           <ul className="mt-2 text-xs text-orange-400">
             <li>{selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES'} = true</li>
             <li>ENVIRONMENT = {selectedEnvironment}</li>
+            <li>DATABASE_ENV = {selectedEnvironment}</li>
+            <li>RESTORE_TARGET = {selectedEnvironment}</li>
           </ul>
         </div>
       )}

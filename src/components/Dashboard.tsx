@@ -18,6 +18,28 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
   const currentUser = localStorage.getItem('currentUser') || 'admin';
   const isAdmin = currentUser === 'admin';
 
+  // Definir quais abas cada tipo de usuário pode acessar
+  const getUserTabs = () => {
+    const baseTabs = [
+      { value: 'date', label: 'Data', icon: Calendar, adminOnly: false },
+      { value: 'scripts', label: 'Scripts', icon: Upload, adminOnly: false },
+      { value: 'logs', label: 'Logs', icon: FileText, adminOnly: false }
+    ];
+
+    const adminTabs = [
+      { value: 'database', label: 'Banco', icon: Database, adminOnly: true },
+      { value: 'users', label: 'Usuários', icon: Users, adminOnly: true }
+    ];
+
+    if (isAdmin) {
+      return [...baseTabs.slice(0, 1), ...adminTabs.slice(0, 1), ...baseTabs.slice(1), ...adminTabs.slice(1)];
+    }
+
+    return baseTabs;
+  };
+
+  const userTabs = getUserTabs();
+
   const handleLogout = () => {
     const logEntry = {
       timestamp: new Date().toISOString(),
@@ -63,29 +85,17 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
       {/* Main Content */}
       <div className="relative z-10 container mx-auto px-4 py-8">
         <Tabs defaultValue="date" className="w-full">
-          <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-5' : 'grid-cols-4'} bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30`}>
-            <TabsTrigger value="date" className="data-[state=active]:bg-cyan-500/20">
-              <Calendar className="w-4 h-4 mr-2" />
-              Data
-            </TabsTrigger>
-            {isAdmin && (
-              <TabsTrigger value="database" className="data-[state=active]:bg-cyan-500/20">
-                <Database className="w-4 h-4 mr-2" />
-                Banco
+          <TabsList className={`grid w-full grid-cols-${userTabs.length} bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30`}>
+            {userTabs.map((tab) => (
+              <TabsTrigger 
+                key={tab.value} 
+                value={tab.value} 
+                className="data-[state=active]:bg-cyan-500/20"
+              >
+                <tab.icon className="w-4 h-4 mr-2" />
+                {tab.label}
               </TabsTrigger>
-            )}
-            <TabsTrigger value="scripts" className="data-[state=active]:bg-cyan-500/20">
-              <Upload className="w-4 h-4 mr-2" />
-              Scripts
-            </TabsTrigger>
-            <TabsTrigger value="users" className="data-[state=active]:bg-cyan-500/20">
-              <Users className="w-4 h-4 mr-2" />
-              Usuários
-            </TabsTrigger>
-            <TabsTrigger value="logs" className="data-[state=active]:bg-cyan-500/20">
-              <FileText className="w-4 h-4 mr-2" />
-              Logs
-            </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="date" className="mt-6">
@@ -132,9 +142,11 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
             </Card>
           </TabsContent>
 
-          <TabsContent value="users" className="mt-6">
-            <UserManagement />
-          </TabsContent>
+          {isAdmin && (
+            <TabsContent value="users" className="mt-6">
+              <UserManagement />
+            </TabsContent>
+          )}
 
           <TabsContent value="logs" className="mt-6">
             <SystemLogs />
