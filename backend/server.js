@@ -70,6 +70,41 @@ app.get('/api/backend-logs', (req, res) => {
   }
 });
 
+// Nova rota para salvar script editado
+app.post('/api/save-script', express.text({ type: 'text/plain' }), (req, res) => {
+  try {
+    const { filename, type } = req.query;
+    const content = req.body;
+    
+    if (!filename) {
+      return res.status(400).json({ success: false, error: 'Nome do arquivo é obrigatório' });
+    }
+    
+    const filePath = path.join('/app/scripts', filename);
+    
+    fs.writeFileSync(filePath, content);
+    fs.chmodSync(filePath, '755');
+    
+    logAction('info', 'SCRIPT_SAVED', {
+      fileName: filename,
+      type,
+      path: filePath,
+      size: content.length
+    });
+    
+    res.json({
+      success: true,
+      fileName: filename,
+      type,
+      path: filePath,
+      size: content.length
+    });
+  } catch (error) {
+    logAction('error', 'SCRIPT_SAVE_ERROR', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
 // Nova rota para preview de script
 app.get('/api/preview-script/:filename', (req, res) => {
   try {
@@ -105,11 +140,11 @@ app.post('/api/set-env', (req, res) => {
     
     fs.writeFileSync(envFile, envContent);
     
-    logAction('SET_ENV_VARIABLES', { variables: envVars, envFile });
+    logAction('info', 'SET_ENV_VARIABLES', { variables: envVars, envFile });
     
     res.json({ success: true, envFile, variables: envVars });
   } catch (error) {
-    logAction('SET_ENV_ERROR', { error: error.message });
+    logAction('error', 'SET_ENV_ERROR', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -128,7 +163,7 @@ app.post('/api/upload-script', upload.single('script'), (req, res) => {
     // Dar permissão de execução
     fs.chmodSync(filePath, '755');
     
-    logAction('SCRIPT_UPLOADED', {
+    logAction('info', 'SCRIPT_UPLOADED', {
       fileName,
       type,
       path: filePath,
@@ -143,7 +178,7 @@ app.post('/api/upload-script', upload.single('script'), (req, res) => {
       size: req.file.size
     });
   } catch (error) {
-    logAction('SCRIPT_UPLOAD_ERROR', { error: error.message });
+    logAction('error', 'SCRIPT_UPLOAD_ERROR', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -182,7 +217,7 @@ app.get('/api/scripts', (req, res) => {
     
     res.json(scripts);
   } catch (error) {
-    logAction('LIST_SCRIPTS_ERROR', { error: error.message });
+    logAction('error', 'LIST_SCRIPTS_ERROR', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -197,11 +232,11 @@ app.get('/api/download-script/:filename', (req, res) => {
       return res.status(404).json({ success: false, error: 'Arquivo não encontrado' });
     }
     
-    logAction('SCRIPT_DOWNLOADED', { fileName });
+    logAction('info', 'SCRIPT_DOWNLOADED', { fileName });
     
     res.download(filePath, fileName);
   } catch (error) {
-    logAction('SCRIPT_DOWNLOAD_ERROR', { error: error.message });
+    logAction('error', 'SCRIPT_DOWNLOAD_ERROR', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -218,11 +253,11 @@ app.delete('/api/delete-script/:filename', (req, res) => {
     
     fs.unlinkSync(filePath);
     
-    logAction('SCRIPT_DELETED', { fileName });
+    logAction('info', 'SCRIPT_DELETED', { fileName });
     
     res.json({ success: true, message: 'Script removido com sucesso' });
   } catch (error) {
-    logAction('SCRIPT_DELETE_ERROR', { error: error.message });
+    logAction('error', 'SCRIPT_DELETE_ERROR', error.message);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -253,7 +288,7 @@ app.post('/api/execute-script', (req, res) => {
     const logFile = `/app/logs/execution_${Date.now()}.log`;
     const command = `cd /app/scripts && source .env && bash ${scriptName}`;
     
-    logAction('SCRIPT_EXECUTION_START', {
+    logAction('info', 'SCRIPT_EXECUTION_START', {
       scriptName,
       action,
       environment,
@@ -285,7 +320,7 @@ ${error ? error.message : 'None'}
       fs.writeFileSync(logFile, logContent);
       
       if (error) {
-        logAction('SCRIPT_EXECUTION_ERROR', {
+        logAction('error', 'SCRIPT_EXECUTION_ERROR', {
           scriptName,
           action,
           error: error.message,
@@ -301,7 +336,7 @@ ${error ? error.message : 'None'}
           exitCode: error.code
         });
       } else {
-        logAction('SCRIPT_EXECUTION_SUCCESS', {
+        logAction('info', 'SCRIPT_EXECUTION_SUCCESS', {
           scriptName,
           action,
           stdout,
@@ -319,7 +354,7 @@ ${error ? error.message : 'None'}
     });
     
   } catch (error) {
-    logAction('SCRIPT_EXECUTION_SETUP_ERROR', { error: error.message });
+    logAction('error', 'SCRIPT_EXECUTION_SETUP_ERROR', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -351,7 +386,7 @@ app.get('/api/check-script/:type', (req, res) => {
       type 
     });
   } catch (error) {
-    logAction('CHECK_SCRIPT_ERROR', { error: error.message });
+    logAction('error', 'CHECK_SCRIPT_ERROR', { error: error.message });
     res.status(500).json({ success: false, error: error.message });
   }
 });

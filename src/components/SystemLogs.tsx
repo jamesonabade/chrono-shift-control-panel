@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,6 +23,7 @@ interface BackendLog {
 const SystemLogs = () => {
   const [systemLogs, setSystemLogs] = useState<LogEntry[]>([]);
   const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     const loadSystemLogs = () => {
@@ -32,39 +32,33 @@ const SystemLogs = () => {
     };
 
     const loadBackendLogs = async () => {
+      setLoading(true);
       try {
         const response = await fetch('http://localhost:3001/api/backend-logs');
         if (response.ok) {
           const logs = await response.json();
-          setBackendLogs(logs);
+          console.log('Backend logs carregados:', logs);
+          setBackendLogs(Array.isArray(logs) ? logs : []);
         } else {
           console.error('Erro ao carregar logs do backend:', response.statusText);
+          setBackendLogs([]);
         }
       } catch (error) {
         console.error('Erro ao carregar logs do backend:', error);
-        // Fallback para logs simulados baseados na atividade do sistema
-        const systemLogEntries = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-        const fallbackLogs: BackendLog[] = systemLogEntries
-          .filter((log: LogEntry) => ['SET_DATE_VARIABLES', 'RESTORE_DATABASE', 'EXECUTE_SCRIPT'].includes(log.action))
-          .map((log: LogEntry) => ({
-            timestamp: log.timestamp,
-            level: 'INFO',
-            action: log.action,
-            details: log.details,
-            message: `Backend processou: ${log.action}`
-          }));
-        setBackendLogs(fallbackLogs.reverse());
+        setBackendLogs([]);
+      } finally {
+        setLoading(false);
       }
     };
 
     loadSystemLogs();
     loadBackendLogs();
     
-    // Atualiza logs a cada 5 segundos
+    // Atualiza logs a cada 10 segundos
     const interval = setInterval(() => {
       loadSystemLogs();
       loadBackendLogs();
-    }, 5000);
+    }, 10000);
     
     return () => clearInterval(interval);
   }, []);
@@ -242,7 +236,12 @@ const SystemLogs = () => {
             </div>
 
             <ScrollArea className="h-96 w-full">
-              {backendLogs.length === 0 ? (
+              {loading ? (
+                <div className="flex items-center justify-center h-32 text-slate-400">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
+                  <span className="ml-2">Carregando logs...</span>
+                </div>
+              ) : backendLogs.length === 0 ? (
                 <div className="flex items-center justify-center h-32 text-slate-400">
                   <Server className="w-8 h-8 mr-2" />
                   Nenhum log do backend disponível
