@@ -89,7 +89,7 @@ const SystemLogs = () => {
       fileName = `system-logs-${new Date().toISOString().split('T')[0]}.txt`;
     } else {
       logsText = backendLogs.map(log => 
-        `[${log.timestamp}] ${log.level} - ${log.message}${log.data ? ': ' + JSON.stringify(log.data) : ''}`
+        `[${log.timestamp}] ${log.level} - ${log.message}${log.details ? ': ' + JSON.stringify(log.details) : ''}`
       ).join('\n');
       fileName = `backend-logs-${new Date().toISOString().split('T')[0]}.txt`;
     }
