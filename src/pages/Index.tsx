@@ -12,7 +12,8 @@ const Index = () => {
   useEffect(() => {
     // Verifica se o usuário já está logado
     const authStatus = localStorage.getItem('isAuthenticated');
-    if (authStatus === 'true') {
+    const currentUser = localStorage.getItem('currentUser');
+    if (authStatus === 'true' && currentUser) {
       setIsAuthenticated(true);
     }
   }, []);
@@ -25,6 +26,7 @@ const Index = () => {
   const handleLogout = () => {
     setIsAuthenticated(false);
     localStorage.removeItem('isAuthenticated');
+    localStorage.removeItem('currentUser');
     setShowCustomization(false);
   };
 
@@ -32,24 +34,31 @@ const Index = () => {
     return <LoginPage onLogin={handleLogin} />;
   }
 
+  const currentUser = localStorage.getItem('currentUser');
+  const isAdmin = currentUser === 'administrador';
+
   return (
     <div className="relative">
       <Dashboard onLogout={handleLogout} />
       
-      {/* Botão de personalização - apenas após login */}
-      <Button
-        onClick={() => setShowCustomization(!showCustomization)}
-        className="fixed top-4 right-4 bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 hover:bg-slate-700/80 z-30"
-        variant="outline"
-        size="sm"
-      >
-        🎨 Personalizar Login
-      </Button>
+      {/* Botão de personalização - apenas para admin */}
+      {isAdmin && (
+        <Button
+          onClick={() => setShowCustomization(!showCustomization)}
+          className="fixed top-4 right-4 bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 hover:bg-slate-700/80 z-30"
+          variant="outline"
+          size="sm"
+        >
+          🎨 Personalizar Login
+        </Button>
+      )}
 
-      <CustomizeLogin 
-        show={showCustomization} 
-        onClose={() => setShowCustomization(false)} 
-      />
+      {isAdmin && (
+        <CustomizeLogin 
+          show={showCustomization} 
+          onClose={() => setShowCustomization(false)} 
+        />
+      )}
     </div>
   );
 };

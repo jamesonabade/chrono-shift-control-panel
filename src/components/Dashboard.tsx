@@ -15,30 +15,57 @@ interface DashboardProps {
 }
 
 const Dashboard = ({ onLogout }: DashboardProps) => {
-  const currentUser = localStorage.getItem('currentUser') || 'admin';
-  const isAdmin = currentUser === 'admin';
+  const currentUser = localStorage.getItem('currentUser') || 'administrador';
+  const isAdmin = currentUser === 'administrador';
 
-  // Definir quais abas cada tipo de usuário pode acessar
-  const getUserTabs = () => {
-    const baseTabs = [
-      { value: 'date', label: 'Data', icon: Calendar, adminOnly: false },
-      { value: 'scripts', label: 'Scripts', icon: Upload, adminOnly: false },
-      { value: 'logs', label: 'Logs', icon: FileText, adminOnly: false }
-    ];
-
-    const adminTabs = [
-      { value: 'database', label: 'Banco', icon: Database, adminOnly: true },
-      { value: 'users', label: 'Usuários', icon: Users, adminOnly: true }
-    ];
-
-    if (isAdmin) {
-      return [...baseTabs.slice(0, 1), ...adminTabs.slice(0, 1), ...baseTabs.slice(1), ...adminTabs.slice(1)];
+  // Definir permissões por usuário
+  const getUserPermissions = () => {
+    const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
+    
+    // Permissões padrão para administrador
+    if (currentUser === 'administrador') {
+      return {
+        date: true,
+        database: true,
+        scripts: true,
+        users: true,
+        logs: true
+      };
     }
 
-    return baseTabs;
+    // Permissões para usuário comum (padrão)
+    if (currentUser === 'usuario') {
+      return userPermissions[currentUser] || {
+        date: true,
+        database: false,
+        scripts: true,
+        users: false,
+        logs: true
+      };
+    }
+
+    // Permissões para outros usuários criados
+    return userPermissions[currentUser] || {
+      date: true,
+      database: false,
+      scripts: true,
+      users: false,
+      logs: false
+    };
   };
 
-  const userTabs = getUserTabs();
+  const permissions = getUserPermissions();
+
+  // Definir abas baseadas nas permissões
+  const getAllTabs = () => [
+    { value: 'date', label: 'Data', icon: Calendar, permission: 'date' },
+    { value: 'database', label: 'Banco', icon: Database, permission: 'database' },
+    { value: 'scripts', label: 'Scripts', icon: Upload, permission: 'scripts' },
+    { value: 'users', label: 'Usuários', icon: Users, permission: 'users' },
+    { value: 'logs', label: 'Logs', icon: FileText, permission: 'logs' }
+  ];
+
+  const userTabs = getAllTabs().filter(tab => permissions[tab.permission]);
 
   const handleLogout = () => {
     const logEntry = {
@@ -84,7 +111,7 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
 
       {/* Main Content */}
       <div className="relative z-10 container mx-auto px-4 py-8">
-        <Tabs defaultValue="date" className="w-full">
+        <Tabs defaultValue={userTabs[0]?.value || 'date'} className="w-full">
           <TabsList className={`grid w-full grid-cols-${userTabs.length} bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30`}>
             {userTabs.map((tab) => (
               <TabsTrigger 
@@ -98,21 +125,23 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
             ))}
           </TabsList>
 
-          <TabsContent value="date" className="mt-6">
-            <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-              <CardHeader>
-                <CardTitle className="text-xl text-cyan-400 flex items-center">
-                  <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                  Configuração de Data
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <DateSelector />
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {permissions.date && (
+            <TabsContent value="date" className="mt-6">
+              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
+                <CardHeader>
+                  <CardTitle className="text-xl text-cyan-400 flex items-center">
+                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
+                    Configuração de Data
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <DateSelector />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
-          {isAdmin && (
+          {permissions.database && (
             <TabsContent value="database" className="mt-6">
               <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
                 <CardHeader>
@@ -128,29 +157,33 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
             </TabsContent>
           )}
 
-          <TabsContent value="scripts" className="mt-6">
-            <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-              <CardHeader>
-                <CardTitle className="text-xl text-cyan-400 flex items-center">
-                  <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                  Scripts de Administração
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ScriptUpload />
-              </CardContent>
-            </Card>
-          </TabsContent>
+          {permissions.scripts && (
+            <TabsContent value="scripts" className="mt-6">
+              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
+                <CardHeader>
+                  <CardTitle className="text-xl text-cyan-400 flex items-center">
+                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
+                    Scripts de Administração
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ScriptUpload />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
-          {isAdmin && (
+          {permissions.users && (
             <TabsContent value="users" className="mt-6">
               <UserManagement />
             </TabsContent>
           )}
 
-          <TabsContent value="logs" className="mt-6">
-            <SystemLogs />
-          </TabsContent>
+          {permissions.logs && (
+            <TabsContent value="logs" className="mt-6">
+              <SystemLogs />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>
