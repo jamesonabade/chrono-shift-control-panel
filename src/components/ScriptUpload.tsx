@@ -1,9 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, FileText, Trash2, Play } from 'lucide-react';
+import { Upload, Download, FileText, Trash2, Play, Eye } from 'lucide-react';
 
 interface UploadedScript {
   name: string;
@@ -14,6 +15,9 @@ interface UploadedScript {
 
 const ScriptUpload = () => {
   const [uploadedScripts, setUploadedScripts] = useState<UploadedScript[]>([]);
+  const [previewContent, setPreviewContent] = useState('');
+  const [previewFileName, setPreviewFileName] = useState('');
+  const [showPreview, setShowPreview] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -177,6 +181,32 @@ const ScriptUpload = () => {
     }
   };
 
+  const handlePreview = async (script: UploadedScript) => {
+    try {
+      const response = await fetch(`http://localhost:3001/api/preview-script/${script.name}`);
+      if (response.ok) {
+        const result = await response.json();
+        setPreviewContent(result.content);
+        setPreviewFileName(result.fileName);
+        setShowPreview(true);
+        
+        toast({
+          title: "Preview carregado!",
+          description: `Conteúdo de ${script.name} carregado`,
+        });
+      } else {
+        throw new Error('Falha ao carregar preview');
+      }
+    } catch (error) {
+      console.error('Erro no preview:', error);
+      toast({
+        title: "Erro",
+        description: "Erro ao carregar preview do script",
+        variant: "destructive"
+      });
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Upload Section */}
@@ -269,6 +299,15 @@ const ScriptUpload = () => {
                     <Play className="w-4 h-4" />
                   </Button>
                   <Button
+                    onClick={() => handlePreview(script)}
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                    title="Visualizar Script"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </Button>
+                  <Button
                     onClick={() => handleDownload(script)}
                     variant="outline"
                     size="sm"
@@ -306,6 +345,23 @@ const ScriptUpload = () => {
           </p>
         </div>
       )}
+
+      {/* Dialog para preview do script */}
+      <Dialog open={showPreview} onOpenChange={setShowPreview}>
+        <DialogContent className="max-w-4xl max-h-[80vh] bg-slate-800 border-cyan-500/30">
+          <DialogHeader>
+            <DialogTitle className="text-cyan-400 flex items-center">
+              <FileText className="w-5 h-5 mr-2" />
+              Preview: {previewFileName}
+            </DialogTitle>
+          </DialogHeader>
+          <ScrollArea className="h-[60vh] w-full rounded-md border border-slate-600/30 p-4">
+            <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono bg-slate-900/50 p-4 rounded">
+              {previewContent}
+            </pre>
+          </ScrollArea>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

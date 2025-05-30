@@ -16,8 +16,9 @@ interface LogEntry {
 interface BackendLog {
   timestamp: string;
   level: string;
+  action: string;
+  details: any;
   message: string;
-  data?: any;
 }
 
 const SystemLogs = () => {
@@ -32,25 +33,27 @@ const SystemLogs = () => {
 
     const loadBackendLogs = async () => {
       try {
-        // Simular logs do backend baseados na atividade
-        const backendLogsData: BackendLog[] = [];
-        
-        // Verificar se existem logs de execução de scripts
-        const systemLogEntries = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-        systemLogEntries.forEach((log: LogEntry) => {
-          if (log.action === 'SET_DATE_VARIABLES' || log.action === 'RESTORE_DATABASE' || log.action === 'EXECUTE_SCRIPT') {
-            backendLogsData.push({
-              timestamp: log.timestamp,
-              level: 'INFO',
-              message: `Backend processou: ${log.action}`,
-              data: log.details
-            });
-          }
-        });
-
-        setBackendLogs(backendLogsData.reverse());
+        const response = await fetch('http://localhost:3001/api/backend-logs');
+        if (response.ok) {
+          const logs = await response.json();
+          setBackendLogs(logs);
+        } else {
+          console.error('Erro ao carregar logs do backend:', response.statusText);
+        }
       } catch (error) {
         console.error('Erro ao carregar logs do backend:', error);
+        // Fallback para logs simulados baseados na atividade do sistema
+        const systemLogEntries = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+        const fallbackLogs: BackendLog[] = systemLogEntries
+          .filter((log: LogEntry) => ['SET_DATE_VARIABLES', 'RESTORE_DATABASE', 'EXECUTE_SCRIPT'].includes(log.action))
+          .map((log: LogEntry) => ({
+            timestamp: log.timestamp,
+            level: 'INFO',
+            action: log.action,
+            details: log.details,
+            message: `Backend processou: ${log.action}`
+          }));
+        setBackendLogs(fallbackLogs.reverse());
       }
     };
 
@@ -250,15 +253,18 @@ const SystemLogs = () => {
                     <div key={index} className="p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
                       <div className="flex items-center justify-between mb-1">
                         <span className={`font-medium ${getLogLevelColor(log.level)}`}>
-                          [{log.level}] {log.message}
+                          [{log.level}] {log.action}
                         </span>
                         <span className="text-xs text-slate-400">
                           {new Date(log.timestamp).toLocaleString('pt-BR')}
                         </span>
                       </div>
-                      {log.data && (
+                      <div className="text-sm text-slate-300 mb-1">
+                        {log.message}
+                      </div>
+                      {log.details && (
                         <div className="text-xs text-slate-400 mt-1 font-mono bg-slate-800/50 p-2 rounded">
-                          {JSON.stringify(log.data, null, 2)}
+                          {JSON.stringify(log.details, null, 2)}
                         </div>
                       )}
                     </div>

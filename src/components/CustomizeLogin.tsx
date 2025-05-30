@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
@@ -14,6 +14,14 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
   const [backgroundImage, setBackgroundImage] = useState(localStorage.getItem('loginBackground') || '');
   const [logo, setLogo] = useState(localStorage.getItem('loginLogo') || '');
   const { toast } = useToast();
+
+  useEffect(() => {
+    // Sincronizar com localStorage
+    const savedBackground = localStorage.getItem('loginBackground') || '';
+    const savedLogo = localStorage.getItem('loginLogo') || '';
+    setBackgroundImage(savedBackground);
+    setLogo(savedLogo);
+  }, [show]);
 
   if (!show) return null;
 
@@ -33,14 +41,26 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
       if (type === 'background') {
         setBackgroundImage(result);
         localStorage.setItem('loginBackground', result);
+        
+        // Disparar evento customizado para notificar outras abas/componentes
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'loginBackground',
+          newValue: result
+        }));
       } else {
         setLogo(result);
         localStorage.setItem('loginLogo', result);
+        
+        // Disparar evento customizado para notificar outras abas/componentes
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'loginLogo',
+          newValue: result
+        }));
       }
       
       toast({
         title: "Imagem carregada!",
-        description: `${type === 'background' ? 'Papel de parede' : 'Logo'} atualizado`,
+        description: `${type === 'background' ? 'Papel de parede aplicado globalmente' : 'Logo atualizado'}`,
       });
     };
     reader.readAsDataURL(file);
@@ -50,21 +70,33 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
     if (type === 'background') {
       setBackgroundImage('');
       localStorage.removeItem('loginBackground');
+      
+      // Disparar evento customizado
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'loginBackground',
+        newValue: null
+      }));
     } else {
       setLogo('');
       localStorage.removeItem('loginLogo');
+      
+      // Disparar evento customizado
+      window.dispatchEvent(new StorageEvent('storage', {
+        key: 'loginLogo',
+        newValue: null
+      }));
     }
     
     toast({
       title: "Imagem removida!",
-      description: `${type === 'background' ? 'Papel de parede' : 'Logo'} removido`,
+      description: `${type === 'background' ? 'Papel de parede removido globalmente' : 'Logo removido'}`,
     });
   };
 
   return (
     <div className="absolute top-16 right-4 bg-slate-800/90 backdrop-blur-lg border border-cyan-500/30 rounded-lg p-4 space-y-4 z-20 min-w-[300px]">
       <div className="flex justify-between items-center">
-        <h3 className="text-white font-semibold">Personalização do Login</h3>
+        <h3 className="text-white font-semibold">Personalização Global</h3>
         <Button
           onClick={onClose}
           variant="outline"
@@ -76,7 +108,7 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
       </div>
       
       <div className="space-y-2">
-        <label className="text-sm text-slate-300">Papel de Parede</label>
+        <label className="text-sm text-slate-300">Papel de Parede (Global)</label>
         <div className="flex gap-2">
           <Input
             type="file"
@@ -98,10 +130,13 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
             </Button>
           )}
         </div>
+        <p className="text-xs text-slate-500">
+          Aplica o papel de parede para todos os usuários
+        </p>
       </div>
 
       <div className="space-y-2">
-        <label className="text-sm text-slate-300">Logo</label>
+        <label className="text-sm text-slate-300">Logo (Login + Dashboard)</label>
         <div className="flex gap-2">
           <Input
             type="file"
@@ -123,6 +158,9 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
             </Button>
           )}
         </div>
+        <p className="text-xs text-slate-500">
+          Aparece no login e após logado
+        </p>
       </div>
     </div>
   );

@@ -1,4 +1,3 @@
-
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
@@ -8,6 +7,9 @@ const cors = require('cors');
 
 const app = express();
 const PORT = 3001;
+
+// Array para armazenar logs em memória
+let backendLogs = [];
 
 // Middleware
 app.use(cors());
@@ -29,23 +31,65 @@ const storage = multer.diskStorage({
 
 const upload = multer({ storage });
 
-// Função para logging
-const logAction = (action, details) => {
+// Função para logging melhorada
+const logAction = (level, action, details) => {
   const logEntry = {
     timestamp: new Date().toISOString(),
+    level: level.toUpperCase(),
     action,
-    details
+    details,
+    message: `[${level.toUpperCase()}] ${action}: ${typeof details === 'string' ? details : JSON.stringify(details)}`
   };
   
-  console.log(`[${action}]`, JSON.stringify(details));
+  // Adicionar ao array de logs em memória
+  backendLogs.push(logEntry);
   
+  // Manter apenas os últimos 100 logs
+  if (backendLogs.length > 100) {
+    backendLogs = backendLogs.slice(-100);
+  }
+  
+  console.log(`[${level.toUpperCase()}] ${action}:`, details);
+  
+  // Salvar em arquivo também
   const logFile = '/app/logs/backend.log';
-  const logLine = `${logEntry.timestamp} - ${action}: ${JSON.stringify(details)}\n`;
+  const logLine = `${logEntry.timestamp} - [${level.toUpperCase()}] ${action}: ${JSON.stringify(details)}\n`;
   
   fs.appendFile(logFile, logLine, (err) => {
     if (err) console.error('Erro ao escrever log:', err);
   });
 };
+
+// Nova rota para obter logs do backend
+app.get('/api/backend-logs', (req, res) => {
+  try {
+    res.json(backendLogs.slice().reverse()); // Retorna logs mais recentes primeiro
+  } catch (error) {
+    logAction('error', 'GET_BACKEND_LOGS_ERROR', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Nova rota para preview de script
+app.get('/api/preview-script/:filename', (req, res) => {
+  try {
+    const fileName = req.params.filename;
+    const filePath = path.join('/app/scripts', fileName);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'Arquivo não encontrado' });
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf8');
+    
+    logAction('info', 'SCRIPT_PREVIEW', { fileName });
+    
+    res.json({ success: true, content, fileName });
+  } catch (error) {
+    logAction('error', 'SCRIPT_PREVIEW_ERROR', error.message);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Definir variáveis de ambiente
 app.post('/api/set-env', (req, res) => {
@@ -314,16 +358,14 @@ app.get('/api/check-script/:type', (req, res) => {
 
 // Iniciar servidor
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Backend servidor rodando na porta ${PORT}`);
+  logAction('info', 'SERVER_STARTED', { port: PORT, timestamp: new Date().toISOString() });
   
   // Criar diretórios necessários
   const dirs = ['/app/scripts', '/app/logs'];
   dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
-      console.log(`Diretório criado: ${dir}`);
+      logAction('info', 'DIRECTORY_CREATED', { path: dir });
     }
   });
-  
-  logAction('SERVER_STARTED', { port: PORT, timestamp: new Date().toISOString() });
 });

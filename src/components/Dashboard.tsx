@@ -1,9 +1,8 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, Calendar, Database, Upload, Users, FileText } from 'lucide-react';
+import { LogOut, Calendar, Database, Upload, Users, FileText, Globe } from 'lucide-react';
 import DateSelector from '@/components/DateSelector';
 import DatabaseRestore from '@/components/DatabaseRestore';
 import ScriptUpload from '@/components/ScriptUpload';
@@ -15,8 +14,38 @@ interface DashboardProps {
 }
 
 const Dashboard = ({ onLogout }: DashboardProps) => {
+  const [backgroundImage, setBackgroundImage] = useState('');
+  const [logoImage, setLogoImage] = useState('');
   const currentUser = localStorage.getItem('currentUser') || 'administrador';
   const isAdmin = currentUser === 'administrador';
+
+  useEffect(() => {
+    // Carregar personalizações
+    const savedBackground = localStorage.getItem('loginBackground');
+    const savedLogo = localStorage.getItem('loginLogo');
+    
+    if (savedBackground) setBackgroundImage(savedBackground);
+    if (savedLogo) setLogoImage(savedLogo);
+
+    // Escutar mudanças nas personalizações
+    const handleStorageChange = () => {
+      const newBackground = localStorage.getItem('loginBackground');
+      const newLogo = localStorage.getItem('loginLogo');
+      
+      setBackgroundImage(newBackground || '');
+      setLogoImage(newLogo || '');
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // Verificar mudanças a cada segundo (para mudanças na mesma aba)
+    const interval = setInterval(handleStorageChange, 1000);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Definir permissões por usuário
   const getUserPermissions = () => {
@@ -84,19 +113,45 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
+    <div 
+      className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 relative"
+      style={{
+        backgroundImage: backgroundImage ? `url(${backgroundImage})` : undefined,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat'
+      }}
+    >
+      {/* Overlay escuro se houver imagem de fundo */}
+      {backgroundImage && (
+        <div className="absolute inset-0 bg-black/50"></div>
+      )}
+      
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDU5LCAxMzAsIDI0NiwgMC4xKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
       
       {/* Header */}
       <div className="relative z-10 border-b border-cyan-500/30 bg-slate-800/50 backdrop-blur-lg">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              PAINEL DE CONTROLE
-            </h1>
-            <p className="text-sm text-slate-400">
-              🐳 Docker | Usuário: {currentUser} {isAdmin && '(Admin)'}
-            </p>
+          <div className="flex items-center space-x-4">
+            {logoImage ? (
+              <img 
+                src={logoImage} 
+                alt="Logo" 
+                className="h-10 w-auto object-contain"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-gradient-to-br from-cyan-400 to-blue-500 rounded-full flex items-center justify-center">
+                <Globe className="w-5 h-5 text-white" />
+              </div>
+            )}
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
+                PAINEL DE CONTROLE
+              </h1>
+              <p className="text-sm text-slate-400">
+                🐳 Docker | Usuário: {currentUser} {isAdmin && '(Admin)'}
+              </p>
+            </div>
           </div>
           <Button 
             onClick={handleLogout}
