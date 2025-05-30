@@ -22,7 +22,7 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
   const getUserPermissions = () => {
     const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
     
-    // Permissões padrão para administrador
+    // Permissões padrão para administrador - SEMPRE TODAS
     if (currentUser === 'administrador') {
       return {
         date: true,
@@ -112,7 +112,7 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
       {/* Main Content */}
       <div className="relative z-10 container mx-auto px-4 py-8">
         <Tabs defaultValue={userTabs[0]?.value || 'date'} className="w-full">
-          <TabsList className={`grid w-full grid-cols-${userTabs.length} bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30`}>
+          <TabsList className="grid w-full bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30" style={{ gridTemplateColumns: `repeat(${userTabs.length}, 1fr)` }}>
             {userTabs.map((tab) => (
               <TabsTrigger 
                 key={tab.value} 
