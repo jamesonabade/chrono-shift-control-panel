@@ -24,6 +24,7 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    privileged: true
 
   backend:
     build:
@@ -42,6 +43,8 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+    privileged: true
+    user: root
 
 volumes:
   scripts_data:

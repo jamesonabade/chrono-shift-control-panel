@@ -286,24 +286,29 @@ app.post('/api/execute-script', (req, res) => {
     fs.writeFileSync(envFile, envContent);
     
     const logFile = `/app/logs/execution_${Date.now()}.log`;
-    const command = `cd /app/scripts && source .env && bash ${scriptName}`;
+    // Executar como root com sudo
+    const command = `cd /app/scripts && source .env && sudo bash ${scriptName}`;
     
     logAction('info', 'SCRIPT_EXECUTION_START', {
       scriptName,
       action,
       environment,
-      command
+      command,
+      user: 'root'
     });
     
     exec(command, { 
       cwd: '/app/scripts',
-      env: { ...process.env, ...environment }
+      env: { ...process.env, ...environment },
+      uid: 0, // Executar como root
+      gid: 0
     }, (error, stdout, stderr) => {
       const logContent = `
 Execution Time: ${new Date().toISOString()}
 Action: ${action}
 Script: ${scriptName}
 Command: ${command}
+User: root
 Environment Variables: ${JSON.stringify(environment, null, 2)}
 Exit Code: ${error ? error.code || 1 : 0}
 
@@ -325,13 +330,16 @@ ${error ? error.message : 'None'}
           action,
           error: error.message,
           exitCode: error.code,
-          logFile
+          logFile,
+          stdout,
+          stderr
         });
         
         res.status(500).json({
           success: false,
           error: error.message,
           stderr,
+          stdout,
           logFile,
           exitCode: error.code
         });
@@ -340,6 +348,7 @@ ${error ? error.message : 'None'}
           scriptName,
           action,
           stdout,
+          stderr,
           logFile
         });
         

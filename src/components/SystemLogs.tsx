@@ -1,9 +1,10 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, Trash2, Server, Monitor } from 'lucide-react';
+import { FileText, Download, Trash2, Server, Monitor, Eye, EyeOff } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -24,11 +25,12 @@ const SystemLogs = () => {
   const [systemLogs, setSystemLogs] = useState<LogEntry[]>([]);
   const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     const loadSystemLogs = () => {
       const savedLogs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-      setSystemLogs(savedLogs.reverse()); // Mais recentes primeiro
+      setSystemLogs(savedLogs.reverse());
     };
 
     const loadBackendLogs = async () => {
@@ -54,7 +56,6 @@ const SystemLogs = () => {
     loadSystemLogs();
     loadBackendLogs();
     
-    // Atualiza logs a cada 10 segundos
     const interval = setInterval(() => {
       loadSystemLogs();
       loadBackendLogs();
@@ -70,6 +71,35 @@ const SystemLogs = () => {
 
   const clearBackendLogs = () => {
     setBackendLogs([]);
+  };
+
+  const toggleLogExpansion = (index: number) => {
+    const newExpanded = new Set(expandedLogs);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedLogs(newExpanded);
+  };
+
+  const formatLogText = (text: string, maxLength: number = 200) => {
+    if (!text) return '';
+    
+    // Preservar quebras de linha e formatação
+    const formattedText = text
+      .replace(/\\n/g, '\n')
+      .replace(/\\t/g, '  ')
+      .trim();
+
+    if (formattedText.length <= maxLength) {
+      return formattedText;
+    }
+
+    return {
+      preview: formattedText.substring(0, maxLength) + '...',
+      full: formattedText
+    };
   };
 
   const exportLogs = (type: 'system' | 'backend') => {
@@ -135,6 +165,45 @@ const SystemLogs = () => {
       default:
         return 'text-slate-300';
     }
+  };
+
+  const renderLogMessage = (log: BackendLog, index: number) => {
+    const isExpanded = expandedLogs.has(index);
+    const formattedMessage = formatLogText(log.message);
+    
+    if (typeof formattedMessage === 'string') {
+      return (
+        <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+          {formattedMessage}
+        </pre>
+      );
+    }
+
+    return (
+      <div>
+        <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
+          {isExpanded ? formattedMessage.full : formattedMessage.preview}
+        </pre>
+        <Button
+          onClick={() => toggleLogExpansion(index)}
+          variant="ghost"
+          size="sm"
+          className="mt-2 h-6 px-2 text-xs text-cyan-400 hover:text-cyan-300"
+        >
+          {isExpanded ? (
+            <>
+              <EyeOff className="w-3 h-3 mr-1" />
+              Mostrar menos
+            </>
+          ) : (
+            <>
+              <Eye className="w-3 h-3 mr-1" />
+              Ver completo
+            </>
+          )}
+        </Button>
+      </div>
+    );
   };
 
   return (
@@ -250,7 +319,7 @@ const SystemLogs = () => {
                 <div className="space-y-2">
                   {backendLogs.map((log, index) => (
                     <div key={index} className="p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
-                      <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center justify-between mb-2">
                         <span className={`font-medium ${getLogLevelColor(log.level)}`}>
                           [{log.level}] {log.action}
                         </span>
@@ -258,12 +327,14 @@ const SystemLogs = () => {
                           {new Date(log.timestamp).toLocaleString('pt-BR')}
                         </span>
                       </div>
-                      <div className="text-sm text-slate-300 mb-1">
-                        {log.message}
-                      </div>
+                      
+                      {renderLogMessage(log, index)}
+                      
                       {log.details && (
-                        <div className="text-xs text-slate-400 mt-1 font-mono bg-slate-800/50 p-2 rounded">
-                          {JSON.stringify(log.details, null, 2)}
+                        <div className="text-xs text-slate-400 mt-2 font-mono bg-slate-800/50 p-2 rounded">
+                          <pre className="whitespace-pre-wrap">
+                            {JSON.stringify(log.details, null, 2)}
+                          </pre>
                         </div>
                       )}
                     </div>
