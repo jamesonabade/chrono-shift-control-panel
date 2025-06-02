@@ -1,0 +1,39 @@
+
+FROM docker:25 AS docker-cli
+
+FROM node:18-alpine
+
+# Copiar Docker CLI do estágio anterior
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
+
+# Executar como root
+USER root
+
+WORKDIR /app
+
+# Instalar bash, curl e dependências para docker cli funcionar
+RUN apk add --no-cache bash curl tini sudo tzdata
+
+# Configurar timezone
+ENV TZ=America/Bahia
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+# Criar diretórios necessários
+RUN mkdir -p /app/scripts /app/logs
+
+# Copiar arquivos do backend
+COPY package*.json ./
+RUN npm ci --only=production
+
+# Copiar código fonte
+COPY . .
+
+# Dar permissões completas
+RUN chmod -R 755 /app/scripts 2>/dev/null || true
+RUN chmod -R 755 /app/logs 2>/dev/null || true
+
+# Expor porta
+EXPOSE 3001
+
+# Comando de entrada
+CMD ["tini", "--", "npm", "start"]

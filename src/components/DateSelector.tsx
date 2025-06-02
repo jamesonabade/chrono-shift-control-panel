@@ -1,7 +1,9 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { API_URL } from '@/lib/config';
 
 const DateSelector = () => {
   const [selectedDay, setSelectedDay] = useState<string>('');
@@ -54,7 +56,7 @@ const DateSelector = () => {
 
     try {
       // Verificar se existe script de data
-      const checkResponse = await fetch('http://localhost:3001/api/check-script/date');
+      const checkResponse = await fetch(`${API_URL}/api/check-script/date`);
       const checkResult = await checkResponse.json();
       
       if (!checkResult.exists) {
@@ -88,7 +90,7 @@ const DateSelector = () => {
       console.log('Formatted variables:', envVars);
 
       // Executar script de data diretamente com as variáveis
-      const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
+      const executeResponse = await fetch(`${API_URL}/api/execute-script`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
