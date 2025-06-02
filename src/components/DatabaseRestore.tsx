@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -69,7 +70,9 @@ const DatabaseRestore = () => {
         DB_ENV: selectedEnvironment
       };
 
-      // Executar script de restauração diretamente
+      console.log('Variables being passed to script:', envVars);
+
+      // Executar script de restauração com as variáveis
       const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
         method: 'POST',
         headers: {
@@ -102,7 +105,7 @@ const DatabaseRestore = () => {
           script: checkResult.script,
           error: executeResult.error,
           stderr: executeResult.stderr,
-          environment: executeResult.environment
+          stdout: executeResult.stdout
         });
 
         toast({
