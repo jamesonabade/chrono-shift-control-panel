@@ -68,27 +68,21 @@ const DateSelector = () => {
         return;
       }
 
-      // Definir variáveis de ambiente
+      // Definir variáveis de ambiente com mais opções
       const envVars = {
         VARIAVEL_DIA: selectedDay,
         VARIAVEL_MES: selectedMonth,
         DIA_SELECIONADO: selectedDay,
-        MES_SELECIONADO: selectedMonth
+        MES_SELECIONADO: selectedMonth,
+        NEW_DAY: selectedDay,
+        NEW_MONTH: selectedMonth,
+        DAY: selectedDay,
+        MONTH: selectedMonth,
+        TARGET_DAY: selectedDay,
+        TARGET_MONTH: selectedMonth
       };
 
-      const setEnvResponse = await fetch('http://localhost:3001/api/set-env', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(envVars)
-      });
-
-      if (!setEnvResponse.ok) {
-        throw new Error('Falha ao definir variáveis de ambiente');
-      }
-
-      // Executar script de data
+      // Executar script de data diretamente com as variáveis
       const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
         method: 'POST',
         headers: {
@@ -109,7 +103,8 @@ const DateSelector = () => {
           month: selectedMonth,
           monthName: months.find(m => m.value === selectedMonth)?.label,
           script: checkResult.script,
-          variables: envVars
+          variables: envVars,
+          output: executeResult.output
         });
 
         toast({
@@ -121,12 +116,14 @@ const DateSelector = () => {
           day: selectedDay,
           month: selectedMonth,
           script: checkResult.script,
-          error: executeResult.error
+          error: executeResult.error,
+          stderr: executeResult.stderr,
+          environment: executeResult.environment
         });
 
         toast({
           title: "Erro na execução",
-          description: executeResult.message || "Erro ao executar script de data",
+          description: executeResult.error || "Erro ao executar script de data",
           variant: "destructive"
         });
       }
@@ -195,15 +192,19 @@ const DateSelector = () => {
 
       {selectedDay && selectedMonth && (
         <div className="p-4 bg-slate-700/30 rounded-lg border border-cyan-500/30">
-          <p className="text-sm text-slate-300">
-            Variáveis que serão definidas:
+          <p className="text-sm text-slate-300 mb-2">
+            Variáveis que serão definidas no script:
           </p>
-          <ul className="mt-2 text-xs text-cyan-400">
-            <li>VARIAVEL_DIA = {selectedDay}</li>
-            <li>VARIAVEL_MES = {selectedMonth}</li>
-            <li>DIA_SELECIONADO = {selectedDay}</li>
-            <li>MES_SELECIONADO = {selectedMonth}</li>
-          </ul>
+          <div className="grid grid-cols-2 gap-2 text-xs text-cyan-400">
+            <div>• VARIAVEL_DIA = {selectedDay}</div>
+            <div>• VARIAVEL_MES = {selectedMonth}</div>
+            <div>• DIA_SELECIONADO = {selectedDay}</div>
+            <div>• MES_SELECIONADO = {selectedMonth}</div>
+            <div>• NEW_DAY = {selectedDay}</div>
+            <div>• NEW_MONTH = {selectedMonth}</div>
+            <div>• DAY = {selectedDay}</div>
+            <div>• MONTH = {selectedMonth}</div>
+          </div>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Download, RefreshCw, Eye, X } from 'lucide-react';
+import { Download, RefreshCw, Eye, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface SystemLog {
@@ -42,16 +42,19 @@ const SystemLogs = () => {
   const loadBackendLogs = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/backend-logs');
+      // Usar a URL correta do backend
+      const response = await fetch('http://localhost:3001/api/backend-logs');
       if (response.ok) {
         const logs = await response.json();
         setBackendLogs(logs);
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
     } catch (error) {
       console.error('Erro ao carregar logs do backend:', error);
       toast({
         title: "Erro",
-        description: "Não foi possível carregar os logs do backend",
+        description: "Não foi possível carregar os logs do backend. Verifique se o backend está rodando.",
         variant: "destructive"
       });
     } finally {

@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -58,27 +57,19 @@ const DatabaseRestore = () => {
 
       const envVar = selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES';
 
-      // Definir variáveis de ambiente
+      // Definir variáveis de ambiente com mais opções
       const envVars = {
         [envVar]: 'true',
         ENVIRONMENT: selectedEnvironment,
         DATABASE_ENV: selectedEnvironment,
-        RESTORE_TARGET: selectedEnvironment
+        RESTORE_TARGET: selectedEnvironment,
+        DB_ENVIRONMENT: selectedEnvironment,
+        TARGET_ENV: selectedEnvironment,
+        ENV: selectedEnvironment,
+        DB_ENV: selectedEnvironment
       };
 
-      const setEnvResponse = await fetch('http://localhost:3001/api/set-env', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(envVars)
-      });
-
-      if (!setEnvResponse.ok) {
-        throw new Error('Falha ao definir variáveis de ambiente');
-      }
-
-      // Executar script de restauração
+      // Executar script de restauração diretamente
       const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
         method: 'POST',
         headers: {
@@ -97,7 +88,8 @@ const DatabaseRestore = () => {
         logAction('RESTORE_DATABASE_SUCCESS', {
           environment: selectedEnvironment,
           script: checkResult.script,
-          variables: envVars
+          variables: envVars,
+          output: executeResult.output
         });
 
         toast({
@@ -108,12 +100,14 @@ const DatabaseRestore = () => {
         logAction('RESTORE_DATABASE_ERROR', {
           environment: selectedEnvironment,
           script: checkResult.script,
-          error: executeResult.error
+          error: executeResult.error,
+          stderr: executeResult.stderr,
+          environment: executeResult.environment
         });
 
         toast({
           title: "Erro na restauração",
-          description: executeResult.message || `Falha ao restaurar banco ${selectedEnvironment}`,
+          description: executeResult.error || `Falha ao restaurar banco ${selectedEnvironment}`,
           variant: "destructive"
         });
       }
@@ -163,15 +157,19 @@ const DatabaseRestore = () => {
 
       {selectedEnvironment && (
         <div className="p-4 bg-slate-700/30 rounded-lg border border-orange-500/30">
-          <p className="text-sm text-slate-300">
-            Variáveis de ambiente que serão definidas:
+          <p className="text-sm text-slate-300 mb-2">
+            Variáveis que serão definidas no script:
           </p>
-          <ul className="mt-2 text-xs text-orange-400">
-            <li>{selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES'} = true</li>
-            <li>ENVIRONMENT = {selectedEnvironment}</li>
-            <li>DATABASE_ENV = {selectedEnvironment}</li>
-            <li>RESTORE_TARGET = {selectedEnvironment}</li>
-          </ul>
+          <div className="grid grid-cols-2 gap-2 text-xs text-orange-400">
+            <div>• {selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES'} = true</div>
+            <div>• ENVIRONMENT = {selectedEnvironment}</div>
+            <div>• DATABASE_ENV = {selectedEnvironment}</div>
+            <div>• RESTORE_TARGET = {selectedEnvironment}</div>
+            <div>• DB_ENVIRONMENT = {selectedEnvironment}</div>
+            <div>• TARGET_ENV = {selectedEnvironment}</div>
+            <div>• ENV = {selectedEnvironment}</div>
+            <div>• DB_ENV = {selectedEnvironment}</div>
+          </div>
         </div>
       )}
     </div>

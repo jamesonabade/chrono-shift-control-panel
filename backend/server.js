@@ -1,3 +1,4 @@
+
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
@@ -276,32 +277,41 @@ app.post('/api/execute-script', (req, res) => {
       });
     }
     
-    // Criar arquivo .env com as variáveis
+    // Criar arquivo .env com as variáveis de forma mais robusta
     const envFile = '/app/scripts/.env';
-    let envContent = '';
+    let envContent = '#!/bin/bash\n';
+    
+    // Adicionar variáveis uma por uma com export
     Object.entries(environment).forEach(([key, value]) => {
       envContent += `export ${key}="${value}"\n`;
+      // Também definir no processo atual
+      process.env[key] = value;
     });
     
     fs.writeFileSync(envFile, envContent);
+    fs.chmodSync(envFile, '755');
     
     const logFile = `/app/logs/execution_${Date.now()}.log`;
-    // Executar como root com sudo
-    const command = `cd /app/scripts && source .env && sudo bash ${scriptName}`;
+    
+    // Comando melhorado para garantir que as variáveis sejam carregadas
+    const command = `cd /app/scripts && source .env && bash ${scriptName}`;
     
     logAction('info', 'SCRIPT_EXECUTION_START', {
       scriptName,
       action,
       environment,
       command,
-      user: 'root'
+      user: 'root',
+      envFile,
+      envContent
     });
     
     exec(command, { 
       cwd: '/app/scripts',
       env: { ...process.env, ...environment },
-      uid: 0, // Executar como root
-      gid: 0
+      uid: 0,
+      gid: 0,
+      shell: '/bin/bash'
     }, (error, stdout, stderr) => {
       const logContent = `
 Execution Time: ${new Date().toISOString()}
@@ -311,6 +321,9 @@ Command: ${command}
 User: root
 Environment Variables: ${JSON.stringify(environment, null, 2)}
 Exit Code: ${error ? error.code || 1 : 0}
+
+ENV FILE CONTENT:
+${envContent}
 
 STDOUT:
 ${stdout}
@@ -332,7 +345,9 @@ ${error ? error.message : 'None'}
           exitCode: error.code,
           logFile,
           stdout,
-          stderr
+          stderr,
+          environment,
+          envContent
         });
         
         res.status(500).json({
@@ -341,7 +356,9 @@ ${error ? error.message : 'None'}
           stderr,
           stdout,
           logFile,
-          exitCode: error.code
+          exitCode: error.code,
+          environment,
+          envContent
         });
       } else {
         logAction('info', 'SCRIPT_EXECUTION_SUCCESS', {
@@ -349,7 +366,9 @@ ${error ? error.message : 'None'}
           action,
           stdout,
           stderr,
-          logFile
+          logFile,
+          environment,
+          envContent
         });
         
         res.json({
@@ -357,7 +376,9 @@ ${error ? error.message : 'None'}
           output: stdout,
           stderr,
           logFile,
-          message: `${action} executado com sucesso`
+          message: `${action} executado com sucesso`,
+          environment,
+          envContent
         });
       }
     });
