@@ -18,6 +18,9 @@ RUN npm install
 # Copiar código fonte
 COPY . .
 
+# Copiar arquivo de configuração de build se existir
+COPY .env.build .env 2>/dev/null || true
+
 # Build da aplicação
 RUN npm run build
 
@@ -27,5 +30,5 @@ RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
 # Expor porta
 EXPOSE 8080
 
-# Comando para iniciar
+# Comando padrão para desenvolvimento
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]

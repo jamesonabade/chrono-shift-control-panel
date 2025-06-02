@@ -2,7 +2,14 @@
 # Guia de Deploy em Produção - TimeEventos
 
 ## Visão Geral
-Este guia detalha como fazer o deploy do sistema TimeEventos em ambiente de produção usando Docker e registry privado.
+Este guia detalha como fazer o deploy do sistema TimeEventos em ambiente de produção usando Docker e registry privado com configuração unificada.
+
+## Arquitetura Simplificada
+- **Um único Dockerfile** para frontend (suporta dev e prod)
+- **Um único Dockerfile** para backend
+- **Um único docker-compose.yml** para desenvolvimento local
+- **Configuração centralizada** da API em arquivo `.env.build`
+- **Script unificado** para build e deploy
 
 ## Pré-requisitos
 
@@ -12,15 +19,14 @@ Este guia detalha como fazer o deploy do sistema TimeEventos em ambiente de prod
 - **Disco**: 20GB SSD
 - **OS**: Ubuntu 20.04+ ou similar
 - **Docker**: 20.10+
-- **Docker Compose**: 2.0+
 
 ### Registry Privado
 - Registry Docker configurado (ex: Harbor, GitLab Registry, AWS ECR)
 - Credenciais de acesso (username/password ou token)
 
-## Configuração Inicial
+## Configuração e Build
 
-### 1. Preparação do Ambiente Local (Desenvolvimento)
+### 1. Preparação do Ambiente Local
 
 ```bash
 # Clone do projeto
@@ -29,40 +35,54 @@ cd timeeventos
 
 # Dar permissão aos scripts
 chmod +x build-deploy.sh
-chmod +x scripts/*.sh
 ```
 
-### 2. Build e Push das Imagens
+### 2. Configuração da API
 
-#### Usando o Script Automatizado (Recomendado)
+O endereço da API é configurado automaticamente durante o processo de build:
+
+- **Desenvolvimento**: `http://timeeventos-backend:3001` (padrão)
+- **Produção**: Informado pelo usuário durante o build
+
+### 3. Build e Push das Imagens
+
+#### Script Automatizado (Recomendado)
 
 ```bash
-# Para desenvolvimento
-./build-deploy.sh dev
+# Executar script unificado
+./build-deploy.sh
 
-# Para produção
-./build-deploy.sh prod
+# No Windows
+build-deploy.bat
 ```
 
 Na primeira execução, o script solicitará:
-- URL do registry (ex: my-registry.com)
-- Username do registry
-- Password/Token do registry
 
-As configurações são salvas em `.registry-config` (adicione ao .gitignore).
+1. **Ambiente**: Desenvolvimento ou Produção
+2. **Endereço da API**: (se produção, senão usa padrão)
+3. **URL do Registry**: ex: `registry.uesb.br`
+4. **Diretório**: ex: `timeeventos`
+5. **Nome do projeto**: ex: `timeeventos` (padrão)
+6. **Tag**: ex: `latest` (padrão)
+7. **Credenciais do Registry**: username e password
 
-#### Build Manual
+**Formato das imagens geradas:**
+```
+registry.uesb.br/timeeventos/timeeventos-frontend:latest
+registry.uesb.br/timeeventos/timeeventos-backend:latest
+```
 
-```bash
-# Configurar variáveis
-export REGISTRY_URL="my-registry.com"
-export TAG="$(date +%Y%m%d-%H%M%S)"
+### 4. Configurações Salvas
 
-# Login no registry
-docker login $REGISTRY_URL
+As configurações são salvas automaticamente:
+- **Linux/Mac**: `.build-config`
+- **Windows**: `.build-config.bat`
 
-# Build e push
-./scripts/build-and-push.sh
+**IMPORTANTE**: Adicione esses arquivos ao `.gitignore`:
+```
+.build-config
+.build-config.bat
+.env.build
 ```
 
 ## Deploy no Servidor de Produção
@@ -78,69 +98,93 @@ curl -fsSL https://get.docker.com -o get-docker.sh
 sudo sh get-docker.sh
 sudo usermod -aG docker $USER
 
-# Instalação do Docker Compose
-sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-sudo chmod +x /usr/local/bin/docker-compose
-
 # Reiniciar sessão
 logout
 ```
 
-### 2. Configuração do Projeto
+### 2. Deploy das Aplicações
+
+#### Método 1: Containers Individuais
 
 ```bash
-# Clone do projeto
-git clone <repositorio>
-cd timeeventos
+# Fazer login no registry
+docker login registry.uesb.br
 
-# Criar estrutura
-mkdir -p {scripts,logs,config}
-chmod 755 scripts logs
+# Deploy do backend
+docker run -d \
+  --name timeeventos-backend \
+  -p 3001:3001 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -v timeeventos_scripts:/app/scripts \
+  -v timeeventos_logs:/app/logs \
+  --restart unless-stopped \
+  registry.uesb.br/timeeventos/timeeventos-backend:latest
 
-# Configurar permissões
-sudo chown -R $USER:$USER .
+# Deploy do frontend
+docker run -d \
+  --name timeeventos-frontend \
+  -p 8080:8080 \
+  --link timeeventos-backend \
+  --restart unless-stopped \
+  registry.uesb.br/timeeventos/timeeventos-frontend:latest \
+  npm run preview -- --host 0.0.0.0 --port 8080
 ```
 
-### 3. Deploy das Aplicações
+#### Método 2: Docker Compose (Recomendado)
 
-#### Método 1: Script Automatizado
+Criar arquivo `docker-compose.prod.yml` no servidor:
 
-```bash
-# Configurar variáveis de ambiente
-export REGISTRY_URL="my-registry.com"
-export TAG="20241201-1430"  # Use a tag criada no build
-export SERVER_HOST="production-server.com"  # IP ou domínio do servidor
+```yaml
+version: '3.8'
 
-# Executar deploy
-./scripts/deploy-production.sh
+services:
+  timeeventos-frontend:
+    image: registry.uesb.br/timeeventos/timeeventos-frontend:latest
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - scripts_data:/app/scripts
+      - logs_data:/app/logs
+    command: npm run preview -- --host 0.0.0.0 --port 8080
+    restart: unless-stopped
+    depends_on:
+      - timeeventos-backend
+
+  timeeventos-backend:
+    image: registry.uesb.br/timeeventos/timeeventos-backend:latest
+    ports:
+      - "3001:3001"
+    volumes:
+      - scripts_data:/app/scripts
+      - logs_data:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    privileged: true
+    user: root
+
+volumes:
+  scripts_data:
+  logs_data:
 ```
 
-#### Método 2: Docker Compose Manual
-
+Deploy:
 ```bash
-# Configurar variáveis
-export REGISTRY_URL="my-registry.com"
-export TAG="latest"
-
-# Criar configuração do frontend
-cat > config/config.js << EOF
-window.APP_CONFIG = {
-  API_URL: 'http://localhost:3001'
-};
-EOF
-
-# Deploy
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-### 4. Verificação do Deploy
+### 3. Verificação do Deploy
 
 ```bash
 # Verificar containers
-docker-compose -f docker-compose.prod.yml ps
+docker ps
 
 # Verificar logs
-docker-compose -f docker-compose.prod.yml logs -f
+docker logs timeeventos-frontend
+docker logs timeeventos-backend
 
 # Teste de conectividade
 curl http://localhost:8080  # Frontend
@@ -185,120 +229,20 @@ sudo nginx -t
 sudo systemctl restart nginx
 ```
 
-### SSL com Let's Encrypt
+## Desenvolvimento Local
 
+### Execução Normal
 ```bash
-# Instalação do Certbot
-sudo apt install certbot python3-certbot-nginx
-
-# Obter certificado
-sudo certbot --nginx -d seu-dominio.com
-
-# Renovação automática
-sudo crontab -e
-# Adicionar: 0 2 * * * certbot renew --quiet
+# Para desenvolvimento local (sem build de imagem)
+docker-compose up -d
 ```
 
-## Configurações de Ambiente
-
-### Variáveis de Ambiente Importantes
-
-#### Frontend
-- `NODE_ENV=production`
-- `TZ=America/Bahia`
-
-#### Backend
-- `NODE_ENV=production`
-- `TZ=America/Bahia`
-
-### Configuração de API URL
-
-O frontend usa configuração dinâmica através do arquivo `config/config.js`:
-
-```javascript
-// Produção com domínio específico
-window.APP_CONFIG = {
-  API_URL: 'https://api.timeeventos.com'
-};
-
-// Produção com mesmo servidor
-window.APP_CONFIG = {
-  API_URL: 'http://servidor-producao:3001'
-};
-```
-
-## Monitoramento
-
-### Scripts de Monitoramento
-
-#### Health Check Automatizado
-
+### Com Imagens do Registry
 ```bash
-#!/bin/bash
-# health-check.sh
-
-echo "=== TimeEventos Health Check - $(date) ==="
-
-# Verificar containers
-echo "Containers Status:"
-docker-compose -f docker-compose.prod.yml ps
-
-# Verificar conectividade
-echo -e "\nFrontend Check:"
-curl -s -o /dev/null -w "%{http_code}" http://localhost:8080
-
-echo -e "\nBackend Check:"
-curl -s -o /dev/null -w "%{http_code}" http://localhost:3001/api/scripts
-
-# Verificar recursos
-echo -e "\nDisk Usage:"
-df -h
-
-echo -e "\nMemory Usage:"
-free -h
-
-# Logs recentes com erro
-echo -e "\nRecent Errors:"
-docker-compose -f docker-compose.prod.yml logs --tail=10 | grep -i error
-```
-
-#### Backup Automatizado
-
-```bash
-#!/bin/bash
-# backup.sh
-
-BACKUP_DIR="/home/$USER/backups"
-DATE=$(date +%Y%m%d_%H%M%S)
-PROJECT_DIR="/home/$USER/timeeventos"
-
-mkdir -p $BACKUP_DIR
-
-# Backup de dados importantes
-cd $PROJECT_DIR
-tar -czf $BACKUP_DIR/timeeventos-backup-$DATE.tar.gz scripts/ logs/ config/
-
-# Manter apenas 7 backups
-find $BACKUP_DIR -name "timeeventos-backup-*.tar.gz" -type f -mtime +7 -delete
-
-echo "Backup concluído: timeeventos-backup-$DATE.tar.gz"
-```
-
-### Automação com Crontab
-
-```bash
-# Editar crontab
-crontab -e
-
-# Adicionar jobs
-# Health check a cada 30 minutos
-*/30 * * * * /home/$USER/timeeventos/health-check.sh >> /home/$USER/health.log 2>&1
-
-# Backup diário às 2h
-0 2 * * * /home/$USER/timeeventos/backup.sh >> /home/$USER/backup.log 2>&1
-
-# Limpeza de logs semanalmente
-0 3 * * 0 docker-compose -f /home/$USER/timeeventos/docker-compose.prod.yml exec timeeventos-backend find /app/logs -name "*.log" -mtime +30 -delete
+# Para testar imagens do registry localmente
+# Execute o script e escolha ambiente "desenvolvimento"
+./build-deploy.sh
+# Escolha "y" quando perguntado sobre deploy local
 ```
 
 ## Atualizações
@@ -307,7 +251,8 @@ crontab -e
 
 1. **Build nova versão**:
 ```bash
-./build-deploy.sh prod
+./build-deploy.sh
+# As configurações existentes serão reutilizadas
 ```
 
 2. **Deploy no servidor**:
@@ -315,118 +260,100 @@ crontab -e
 # Parar containers atuais
 docker-compose -f docker-compose.prod.yml down
 
-# Atualizar variável TAG para nova versão
-export TAG="nova-tag"
+# Fazer pull das novas imagens
+docker-compose -f docker-compose.prod.yml pull
 
-# Fazer backup antes da atualização
-./backup.sh
-
-# Deploy nova versão
+# Iniciar com novas imagens
 docker-compose -f docker-compose.prod.yml up -d
 ```
 
-3. **Verificar funcionamento**:
-```bash
-./health-check.sh
-```
+### Configuração da API em Produção
 
-### Rollback
+A URL da API é configurada durante o build da imagem. Para diferentes ambientes:
 
-```bash
-# Parar containers
-docker-compose -f docker-compose.prod.yml down
-
-# Voltar para tag anterior
-export TAG="tag-anterior"
-
-# Deploy versão anterior
-docker-compose -f docker-compose.prod.yml up -d
-```
+- **Mesmo servidor**: `http://timeeventos-backend:3001`
+- **Servidor específico**: `http://192.168.1.100:3001`
+- **Domínio**: `https://api.timeeventos.com`
 
 ## Troubleshooting
 
 ### Problemas Comuns
 
-#### 1. Containers não iniciam
+#### 1. API não conecta
 ```bash
-# Verificar logs detalhados
-docker-compose -f docker-compose.prod.yml logs timeeventos-backend
-docker-compose -f docker-compose.prod.yml logs timeeventos-frontend
+# Verificar se a API foi configurada corretamente durante o build
+docker run --rm registry.uesb.br/timeeventos/timeeventos-frontend:latest cat .env
 
-# Verificar permissões Docker
-groups $USER
-sudo usermod -aG docker $USER
+# Verificar conectividade entre containers
+docker exec timeeventos-frontend ping timeeventos-backend
 ```
 
-#### 2. API não conecta
-```bash
-# Verificar configuração do frontend
-cat config/config.js
-
-# Verificar rede Docker
-docker network ls
-docker network inspect timeeventos_default
-```
-
-#### 3. Scripts não executam
-```bash
-# Verificar permissões
-docker-compose -f docker-compose.prod.yml exec timeeventos-backend ls -la /app/scripts
-
-# Verificar timezone
-docker-compose -f docker-compose.prod.yml exec timeeventos-backend date
-```
-
-#### 4. Problemas de Registry
+#### 2. Problemas de Registry
 ```bash
 # Verificar login
-docker login $REGISTRY_URL
+docker login registry.uesb.br
 
-# Verificar conectividade
-ping $REGISTRY_URL
-
-# Logs de pull
-docker-compose -f docker-compose.prod.yml pull
+# Verificar se as imagens existem
+docker pull registry.uesb.br/timeeventos/timeeventos-frontend:latest
 ```
 
-## Segurança
-
-### Firewall
+#### 3. Scripts não executam no backend
 ```bash
-# Configurar UFW
-sudo ufw allow 22/tcp    # SSH
-sudo ufw allow 80/tcp    # HTTP
-sudo ufw allow 443/tcp   # HTTPS
-sudo ufw enable
-```
+# Verificar permissões
+docker exec timeeventos-backend ls -la /app/scripts
 
-### Backup de Segurança
-- Sempre fazer backup antes de atualizações
-- Manter backups em local separado do servidor
-- Testar restauração de backups periodicamente
+# Verificar montagem do Docker socket
+docker exec timeeventos-backend docker ps
+```
 
 ## Comandos Úteis
 
 ```bash
-# Ver status dos containers
-docker-compose -f docker-compose.prod.yml ps
-
 # Ver logs em tempo real
-docker-compose -f docker-compose.prod.yml logs -f
+docker logs -f timeeventos-frontend
+docker logs -f timeeventos-backend
 
 # Reiniciar serviços
-docker-compose -f docker-compose.prod.yml restart
+docker restart timeeventos-frontend timeeventos-backend
 
 # Atualizar imagens
-docker-compose -f docker-compose.prod.yml pull
-docker-compose -f docker-compose.prod.yml up -d
+docker pull registry.uesb.br/timeeventos/timeeventos-frontend:latest
+docker pull registry.uesb.br/timeeventos/timeeventos-backend:latest
 
 # Limpar recursos não utilizados
 docker system prune -a
 ```
 
+## Arquivos de Configuração
+
+### Estrutura do Projeto
+```
+timeeventos/
+├── build-deploy.sh          # Script principal de build/deploy
+├── build-deploy.bat         # Versão Windows
+├── .env.template            # Template de configuração
+├── .env.build              # Configuração da API (criado automaticamente)
+├── .build-config           # Configurações salvas (Linux/Mac)
+├── .build-config.bat       # Configurações salvas (Windows)
+├── Dockerfile              # Dockerfile unificado frontend
+├── backend/
+│   └── Dockerfile          # Dockerfile backend
+├── docker-compose.yml      # Para desenvolvimento local
+└── docs/
+    └── PRODUCTION-DEPLOY.md # Este documento
+```
+
+### Gitignore Recomendado
+```
+.build-config
+.build-config.bat
+.env.build
+.env.local
+```
+
 ---
 
-**Versão**: 1.0  
+**Versão**: 2.0  
 **Projeto**: TimeEventos  
-**Última Atualização**: 2024-12-01
+**Última Atualização**: 2024-12-02  
+**Mudanças**: Arquitetura unificada com configuração centralizada
