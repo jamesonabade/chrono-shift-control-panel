@@ -1,31 +1,31 @@
 
 #!/bin/bash
 
-# Script para build e push das imagens para registry privado
+# Script para build e push das imagens TimeEventos para registry privado
 
 # Configurações
 REGISTRY_URL=${REGISTRY_URL:-"your-private-registry.com"}
 TAG=${TAG:-$(date +%Y%m%d-%H%M%S)}
 
-echo "=== Building and pushing images to $REGISTRY_URL ==="
+echo "=== Building and pushing TimeEventos images to $REGISTRY_URL ==="
 
 # Build frontend
-echo "Building frontend image..."
-docker build -f Dockerfile.prod -t $REGISTRY_URL/chrono-frontend:$TAG .
-docker build -f Dockerfile.prod -t $REGISTRY_URL/chrono-frontend:latest .
+echo "Building timeeventos-frontend image..."
+docker build -f Dockerfile.prod -t $REGISTRY_URL/timeeventos-frontend:$TAG .
+docker build -f Dockerfile.prod -t $REGISTRY_URL/timeeventos-frontend:latest .
 
 # Build backend
-echo "Building backend image..."
-docker build -f backend/Dockerfile.prod -t $REGISTRY_URL/chrono-backend:$TAG ./backend
-docker build -f backend/Dockerfile.prod -t $REGISTRY_URL/chrono-backend:latest ./backend
+echo "Building timeeventos-backend image..."
+docker build -f backend/Dockerfile.prod -t $REGISTRY_URL/timeeventos-backend:$TAG ./backend
+docker build -f backend/Dockerfile.prod -t $REGISTRY_URL/timeeventos-backend:latest ./backend
 
 # Push images
 echo "Pushing images..."
-docker push $REGISTRY_URL/chrono-frontend:$TAG
-docker push $REGISTRY_URL/chrono-frontend:latest
-docker push $REGISTRY_URL/chrono-backend:$TAG
-docker push $REGISTRY_URL/chrono-backend:latest
+docker push $REGISTRY_URL/timeeventos-frontend:$TAG
+docker push $REGISTRY_URL/timeeventos-frontend:latest
+docker push $REGISTRY_URL/timeeventos-backend:$TAG
+docker push $REGISTRY_URL/timeeventos-backend:latest
 
-echo "=== Images pushed successfully ==="
-echo "Frontend: $REGISTRY_URL/chrono-frontend:$TAG"
-echo "Backend: $REGISTRY_URL/chrono-backend:$TAG"
+echo "=== TimeEventos images pushed successfully ==="
+echo "Frontend: $REGISTRY_URL/timeeventos-frontend:$TAG"
+echo "Backend: $REGISTRY_URL/timeeventos-backend:$TAG"

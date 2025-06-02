@@ -2,14 +2,14 @@
 version: '3.8'
 
 services:
-  frontend:
+  timeeventos-frontend:
     build: .
     ports:
       - "8080:8080"
     environment:
       - NODE_ENV=development
       - VITE_APP_ENV=docker
-      - VITE_API_URL=http://localhost:3001
+      - VITE_API_URL=http://timeeventos-backend:3001
       - TZ=America/Bahia
     volumes:
       - ./src:/app/src
@@ -21,7 +21,7 @@ services:
     command: npm run dev -- --host 0.0.0.0 --port 8080
     restart: unless-stopped
     depends_on:
-      - backend
+      - timeeventos-backend
     logging:
       driver: "json-file"
       options:
@@ -29,7 +29,7 @@ services:
         max-file: "3"
     privileged: true
 
-  backend:
+  timeeventos-backend:
     build:
       context: ./backend
       dockerfile: Dockerfile

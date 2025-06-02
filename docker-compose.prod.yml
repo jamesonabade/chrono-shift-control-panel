@@ -2,8 +2,8 @@
 version: '3.8'
 
 services:
-  frontend:
-    image: ${REGISTRY_URL}/chrono-frontend:${TAG:-latest}
+  timeeventos-frontend:
+    image: ${REGISTRY_URL}/timeeventos-frontend:${TAG:-latest}
     ports:
       - "8080:8080"
     environment:
@@ -18,15 +18,15 @@ services:
     command: npm run preview -- --host 0.0.0.0 --port 8080
     restart: unless-stopped
     depends_on:
-      - backend
+      - timeeventos-backend
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
 
-  backend:
-    image: ${REGISTRY_URL}/chrono-backend:${TAG:-latest}
+  timeeventos-backend:
+    image: ${REGISTRY_URL}/timeeventos-backend:${TAG:-latest}
     ports:
       - "3001:3001"
     volumes:
