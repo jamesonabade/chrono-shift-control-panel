@@ -279,7 +279,10 @@ app.post('/api/execute-script', (req, res) => {
     
     // Criar arquivo .env com as variáveis de forma mais robusta
     const envFile = '/app/scripts/.env';
-    let envContent = '#!/bin/bash\n';
+    let envContent = '#!/bin/bash\n\n';
+    
+    // Adicionar configuração de timezone
+    envContent += 'export TZ="America/Bahia"\n';
     
     // Adicionar variáveis uma por uma com export
     Object.entries(environment).forEach(([key, value]) => {
@@ -288,13 +291,21 @@ app.post('/api/execute-script', (req, res) => {
       process.env[key] = value;
     });
     
+    // Adicionar debug das variáveis
+    envContent += '\n# Debug das variáveis\n';
+    envContent += 'echo "=== VARIÁVEIS DE AMBIENTE ==="\n';
+    Object.keys(environment).forEach(key => {
+      envContent += `echo "${key}=\$${key}"\n`;
+    });
+    envContent += 'echo "=============================="\n\n';
+    
     fs.writeFileSync(envFile, envContent);
     fs.chmodSync(envFile, '755');
     
     const logFile = `/app/logs/execution_${Date.now()}.log`;
     
-    // Comando melhorado para garantir que as variáveis sejam carregadas
-    const command = `cd /app/scripts && source .env && bash ${scriptName}`;
+    // Comando melhorado para garantir privilégios e timezone
+    const command = `cd /app/scripts && export TZ="America/Bahia" && source .env && bash -x ${scriptName}`;
     
     logAction('info', 'SCRIPT_EXECUTION_START', {
       scriptName,
@@ -303,18 +314,20 @@ app.post('/api/execute-script', (req, res) => {
       command,
       user: 'root',
       envFile,
-      envContent
+      envContent,
+      timezone: 'America/Bahia'
     });
     
     exec(command, { 
       cwd: '/app/scripts',
-      env: { ...process.env, ...environment },
+      env: { ...process.env, ...environment, TZ: 'America/Bahia' },
       uid: 0,
       gid: 0,
       shell: '/bin/bash'
     }, (error, stdout, stderr) => {
       const logContent = `
 Execution Time: ${new Date().toISOString()}
+Timezone: America/Bahia
 Action: ${action}
 Script: ${scriptName}
 Command: ${command}
@@ -347,7 +360,8 @@ ${error ? error.message : 'None'}
           stdout,
           stderr,
           environment,
-          envContent
+          envContent,
+          command
         });
         
         res.status(500).json({
@@ -358,7 +372,8 @@ ${error ? error.message : 'None'}
           logFile,
           exitCode: error.code,
           environment,
-          envContent
+          envContent,
+          command
         });
       } else {
         logAction('info', 'SCRIPT_EXECUTION_SUCCESS', {
@@ -368,7 +383,8 @@ ${error ? error.message : 'None'}
           stderr,
           logFile,
           environment,
-          envContent
+          envContent,
+          command
         });
         
         res.json({
@@ -378,7 +394,8 @@ ${error ? error.message : 'None'}
           logFile,
           message: `${action} executado com sucesso`,
           environment,
-          envContent
+          envContent,
+          command
         });
       }
     });

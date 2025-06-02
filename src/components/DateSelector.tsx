@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -68,19 +67,25 @@ const DateSelector = () => {
         return;
       }
 
-      // Definir variáveis de ambiente com mais opções
+      // Formatar dia e mês com 2 dígitos
+      const formattedDay = selectedDay.padStart(2, '0');
+      const formattedMonth = selectedMonth.padStart(2, '0');
+
+      // Definir variáveis de ambiente com formatação correta
       const envVars = {
-        VARIAVEL_DIA: selectedDay,
-        VARIAVEL_MES: selectedMonth,
-        DIA_SELECIONADO: selectedDay,
-        MES_SELECIONADO: selectedMonth,
-        NEW_DAY: selectedDay,
-        NEW_MONTH: selectedMonth,
-        DAY: selectedDay,
-        MONTH: selectedMonth,
-        TARGET_DAY: selectedDay,
-        TARGET_MONTH: selectedMonth
+        VARIAVEL_DIA: formattedDay,
+        VARIAVEL_MES: formattedMonth,
+        DIA_SELECIONADO: formattedDay,
+        MES_SELECIONADO: formattedMonth,
+        NEW_DAY: formattedDay,
+        NEW_MONTH: formattedMonth,
+        DAY: formattedDay,
+        MONTH: formattedMonth,
+        TARGET_DAY: formattedDay,
+        TARGET_MONTH: formattedMonth
       };
+
+      console.log('Formatted variables:', envVars);
 
       // Executar script de data diretamente com as variáveis
       const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
@@ -99,8 +104,8 @@ const DateSelector = () => {
       
       if (executeResult.success) {
         logAction('APPLY_DATE_SUCCESS', {
-          day: selectedDay,
-          month: selectedMonth,
+          day: formattedDay,
+          month: formattedMonth,
           monthName: months.find(m => m.value === selectedMonth)?.label,
           script: checkResult.script,
           variables: envVars,
@@ -109,16 +114,17 @@ const DateSelector = () => {
 
         toast({
           title: "Data aplicada com sucesso!",
-          description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
+          description: `Data configurada: ${formattedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
         });
       } else {
         logAction('APPLY_DATE_ERROR', {
-          day: selectedDay,
-          month: selectedMonth,
+          day: formattedDay,
+          month: formattedMonth,
           script: checkResult.script,
           error: executeResult.error,
           stderr: executeResult.stderr,
-          environment: executeResult.environment
+          stdout: executeResult.stdout,
+          command: executeResult.command
         });
 
         toast({
@@ -196,14 +202,18 @@ const DateSelector = () => {
             Variáveis que serão definidas no script:
           </p>
           <div className="grid grid-cols-2 gap-2 text-xs text-cyan-400">
-            <div>• VARIAVEL_DIA = {selectedDay}</div>
-            <div>• VARIAVEL_MES = {selectedMonth}</div>
-            <div>• DIA_SELECIONADO = {selectedDay}</div>
-            <div>• MES_SELECIONADO = {selectedMonth}</div>
-            <div>• NEW_DAY = {selectedDay}</div>
-            <div>• NEW_MONTH = {selectedMonth}</div>
-            <div>• DAY = {selectedDay}</div>
-            <div>• MONTH = {selectedMonth}</div>
+            <div>• VARIAVEL_DIA = {selectedDay.padStart(2, '0')}</div>
+            <div>• VARIAVEL_MES = {selectedMonth.padStart(2, '0')}</div>
+            <div>• DIA_SELECIONADO = {selectedDay.padStart(2, '0')}</div>
+            <div>• MES_SELECIONADO = {selectedMonth.padStart(2, '0')}</div>
+            <div>• NEW_DAY = {selectedDay.padStart(2, '0')}</div>
+            <div>• NEW_MONTH = {selectedMonth.padStart(2, '0')}</div>
+            <div>• DAY = {selectedDay.padStart(2, '0')}</div>
+            <div>• MONTH = {selectedMonth.padStart(2, '0')}</div>
+          </div>
+          <div className="mt-2 p-2 bg-slate-800/50 rounded text-xs text-green-400">
+            <div>Comando que será executado:</div>
+            <div className="font-mono">date {selectedMonth.padStart(2, '0')}{selectedDay.padStart(2, '0')}$(date +%H%M)$(date +%Y).$(date +%S)</div>
           </div>
         </div>
       )}
