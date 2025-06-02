@@ -16,30 +16,39 @@ interface DashboardProps {
 const Dashboard = ({ onLogout }: DashboardProps) => {
   const [backgroundImage, setBackgroundImage] = useState('');
   const [logoImage, setLogoImage] = useState('');
+  const [title, setTitle] = useState('PAINEL DE CONTROLE');
   const currentUser = localStorage.getItem('currentUser') || 'administrador';
   const isAdmin = currentUser === 'administrador';
 
   useEffect(() => {
     // Carregar personalizações
-    const savedBackground = localStorage.getItem('loginBackground');
-    const savedLogo = localStorage.getItem('loginLogo');
-    
-    if (savedBackground) setBackgroundImage(savedBackground);
-    if (savedLogo) setLogoImage(savedLogo);
+    const loadCustomizations = () => {
+      const savedBackground = localStorage.getItem('loginBackground');
+      const savedLogo = localStorage.getItem('loginLogo');
+      const savedTitle = localStorage.getItem('loginTitle');
+      
+      if (savedBackground) setBackgroundImage(savedBackground);
+      if (savedLogo) setLogoImage(savedLogo);
+      if (savedTitle) setTitle(savedTitle);
+    };
+
+    loadCustomizations();
 
     // Escutar mudanças nas personalizações
-    const handleStorageChange = () => {
-      const newBackground = localStorage.getItem('loginBackground');
-      const newLogo = localStorage.getItem('loginLogo');
-      
-      setBackgroundImage(newBackground || '');
-      setLogoImage(newLogo || '');
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'loginBackground') {
+        setBackgroundImage(e.newValue || '');
+      } else if (e.key === 'loginLogo') {
+        setLogoImage(e.newValue || '');
+      } else if (e.key === 'loginTitle') {
+        setTitle(e.newValue || 'PAINEL DE CONTROLE');
+      }
     };
 
     window.addEventListener('storage', handleStorageChange);
     
     // Verificar mudanças a cada segundo (para mudanças na mesma aba)
-    const interval = setInterval(handleStorageChange, 1000);
+    const interval = setInterval(loadCustomizations, 1000);
     
     return () => {
       window.removeEventListener('storage', handleStorageChange);
@@ -146,7 +155,7 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
             )}
             <div>
               <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-                PAINEL DE CONTROLE
+                {title}
               </h1>
               <p className="text-sm text-slate-400">
                 🐳 Docker | Usuário: {currentUser} {isAdmin && '(Admin)'}

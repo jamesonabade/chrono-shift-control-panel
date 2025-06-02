@@ -1,13 +1,18 @@
 
+FROM docker:25 AS docker-cli
+
 FROM node:18-alpine
+
+# Copiar Docker CLI do estágio anterior
+COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # Executar como root
 USER root
 
 WORKDIR /app
 
-# Instalar bash e outras dependências
-RUN apk add --no-cache bash curl sudo
+# Instalar bash, curl e dependências para docker cli funcionar
+RUN apk add --no-cache bash curl tini sudo
 
 # Criar diretórios necessários
 RUN mkdir -p /app/scripts /app/logs
@@ -26,5 +31,5 @@ RUN chmod -R 755 /app/logs 2>/dev/null || true
 # Expor porta
 EXPOSE 3001
 
-# Comando para iniciar como root
-CMD ["npm", "start"]
+# Comando de entrada
+CMD ["tini", "--", "npm", "start"]

@@ -16,6 +16,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [showPassword, setShowPassword] = useState(false);
   const [backgroundImage, setBackgroundImage] = useState('');
   const [logoImage, setLogoImage] = useState('');
+  const [title, setTitle] = useState('PAINEL DE CONTROLE');
+  const [subtitle, setSubtitle] = useState('Sistema de Gerenciamento Docker');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -65,11 +67,52 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     }
 
     // Carregar personalizações
-    const savedBackground = localStorage.getItem('loginBackground');
-    const savedLogo = localStorage.getItem('loginLogo');
+    const loadCustomizations = () => {
+      const savedBackground = localStorage.getItem('loginBackground');
+      const savedLogo = localStorage.getItem('loginLogo');
+      const savedFavicon = localStorage.getItem('loginFavicon');
+      const savedTitle = localStorage.getItem('loginTitle');
+      const savedSubtitle = localStorage.getItem('loginSubtitle');
+      
+      if (savedBackground) setBackgroundImage(savedBackground);
+      if (savedLogo) setLogoImage(savedLogo);
+      if (savedTitle) setTitle(savedTitle);
+      if (savedSubtitle) setSubtitle(savedSubtitle);
+      
+      if (savedFavicon) {
+        const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
+        link.type = 'image/png';
+        link.rel = 'icon';
+        link.href = savedFavicon;
+        document.getElementsByTagName('head')[0].appendChild(link);
+      }
+    };
+
+    loadCustomizations();
+
+    // Escutar mudanças nas personalizações
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'loginBackground') {
+        setBackgroundImage(e.newValue || '');
+      } else if (e.key === 'loginLogo') {
+        setLogoImage(e.newValue || '');
+      } else if (e.key === 'loginTitle') {
+        setTitle(e.newValue || 'PAINEL DE CONTROLE');
+      } else if (e.key === 'loginSubtitle') {
+        setSubtitle(e.newValue || 'Sistema de Gerenciamento Docker');
+      } else if (e.key === 'loginFavicon') {
+        const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
+        if (link) {
+          link.href = e.newValue || '/favicon.ico';
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
     
-    if (savedBackground) setBackgroundImage(savedBackground);
-    if (savedLogo) setLogoImage(savedLogo);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, []);
 
   const logAction = (action: string, details: any) => {
@@ -165,10 +208,10 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           
           <div className="text-center">
             <CardTitle className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              PAINEL DE CONTROLE
+              {title}
             </CardTitle>
             <p className="text-slate-400 mt-2">
-              Sistema de Gerenciamento Docker
+              {subtitle}
             </p>
           </div>
         </CardHeader>

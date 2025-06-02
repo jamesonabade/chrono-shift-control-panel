@@ -2,11 +2,12 @@
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Download, Trash2, Server, Monitor, Eye, EyeOff } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Download, RefreshCw, Eye, X } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
-interface LogEntry {
+interface SystemLog {
   timestamp: string;
   action: string;
   details: any;
@@ -22,326 +23,272 @@ interface BackendLog {
 }
 
 const SystemLogs = () => {
-  const [systemLogs, setSystemLogs] = useState<LogEntry[]>([]);
+  const [frontendLogs, setFrontendLogs] = useState<SystemLog[]>([]);
   const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
+  const [isLoading, setIsLoading] = useState(false);
+  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const loadSystemLogs = () => {
-      const savedLogs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-      setSystemLogs(savedLogs.reverse());
-    };
-
-    const loadBackendLogs = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('http://localhost:3001/api/backend-logs');
-        if (response.ok) {
-          const logs = await response.json();
-          console.log('Backend logs carregados:', logs);
-          setBackendLogs(Array.isArray(logs) ? logs : []);
-        } else {
-          console.error('Erro ao carregar logs do backend:', response.statusText);
-          setBackendLogs([]);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar logs do backend:', error);
-        setBackendLogs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadSystemLogs();
+    loadFrontendLogs();
     loadBackendLogs();
-    
-    const interval = setInterval(() => {
-      loadSystemLogs();
-      loadBackendLogs();
-    }, 10000);
-    
-    return () => clearInterval(interval);
   }, []);
 
-  const clearSystemLogs = () => {
-    localStorage.removeItem('systemLogs');
-    setSystemLogs([]);
+  const loadFrontendLogs = () => {
+    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+    setFrontendLogs(logs.reverse());
   };
 
-  const clearBackendLogs = () => {
-    setBackendLogs([]);
-  };
-
-  const toggleLogExpansion = (index: number) => {
-    const newExpanded = new Set(expandedLogs);
-    if (newExpanded.has(index)) {
-      newExpanded.delete(index);
-    } else {
-      newExpanded.add(index);
+  const loadBackendLogs = async () => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/backend-logs');
+      if (response.ok) {
+        const logs = await response.json();
+        setBackendLogs(logs);
+      }
+    } catch (error) {
+      console.error('Erro ao carregar logs do backend:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível carregar os logs do backend",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setExpandedLogs(newExpanded);
   };
 
-  const formatLogText = (text: string, maxLength: number = 200) => {
-    if (!text) return '';
-    
-    // Preservar quebras de linha e formatação
-    const formattedText = text
-      .replace(/\\n/g, '\n')
-      .replace(/\\t/g, '  ')
-      .trim();
-
-    if (formattedText.length <= maxLength) {
-      return formattedText;
+  const formatLogMessage = (log: BackendLog) => {
+    if (typeof log.details === 'object' && log.details !== null) {
+      if (log.details.stdout) {
+        return (
+          <div className="space-y-2">
+            <div>
+              <span className="font-medium text-cyan-400">Ação:</span> {log.action}
+            </div>
+            {log.details.scriptName && (
+              <div>
+                <span className="font-medium text-cyan-400">Script:</span> {log.details.scriptName}
+              </div>
+            )}
+            {log.details.stdout && (
+              <div>
+                <span className="font-medium text-green-400">STDOUT:</span>
+                <pre className="mt-1 p-2 bg-green-900/20 border border-green-500/30 rounded text-green-300 whitespace-pre-wrap overflow-x-auto">
+                  {log.details.stdout}
+                </pre>
+              </div>
+            )}
+            {log.details.stderr && (
+              <div>
+                <span className="font-medium text-red-400">STDERR:</span>
+                <pre className="mt-1 p-2 bg-red-900/20 border border-red-500/30 rounded text-red-300 whitespace-pre-wrap overflow-x-auto">
+                  {log.details.stderr}
+                </pre>
+              </div>
+            )}
+            {log.details.error && (
+              <div>
+                <span className="font-medium text-orange-400">Erro:</span> {log.details.error}
+              </div>
+            )}
+          </div>
+        );
+      }
+      return JSON.stringify(log.details, null, 2);
     }
-
-    return {
-      preview: formattedText.substring(0, maxLength) + '...',
-      full: formattedText
-    };
+    return log.message || String(log.details);
   };
 
-  const exportLogs = (type: 'system' | 'backend') => {
-    let logsText = '';
-    let fileName = '';
+  const truncateMessage = (message: string, maxLength: number = 200) => {
+    if (message.length <= maxLength) return message;
+    return message.substring(0, maxLength) + '...';
+  };
 
-    if (type === 'system') {
-      logsText = systemLogs.map(log => 
-        `[${log.timestamp}] ${log.user} - ${log.action}: ${JSON.stringify(log.details)}`
-      ).join('\n');
-      fileName = `system-logs-${new Date().toISOString().split('T')[0]}.txt`;
-    } else {
-      logsText = backendLogs.map(log => 
-        `[${log.timestamp}] ${log.level} - ${log.message}${log.details ? ': ' + JSON.stringify(log.details) : ''}`
-      ).join('\n');
-      fileName = `backend-logs-${new Date().toISOString().split('T')[0]}.txt`;
-    }
-    
-    const blob = new Blob([logsText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    a.click();
+  const exportLogs = (type: 'frontend' | 'backend') => {
+    const logs = type === 'frontend' ? frontendLogs : backendLogs;
+    const dataStr = JSON.stringify(logs, null, 2);
+    const dataBlob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${type}-logs-${new Date().toISOString().split('T')[0]}.json`;
+    link.click();
     URL.revokeObjectURL(url);
   };
 
-  const getActionColor = (action: string) => {
-    switch (action) {
-      case 'SET_DATE_VARIABLES':
-        return 'text-blue-400';
-      case 'RESTORE_DATABASE':
-        return 'text-orange-400';
-      case 'EXECUTE_SCRIPT':
-        return 'text-green-400';
-      case 'CREATE_USER':
-        return 'text-cyan-400';
-      case 'DELETE_USER':
-        return 'text-red-400';
-      case 'CHANGE_PASSWORD':
-        return 'text-yellow-400';
-      case 'LOGIN_SUCCESS':
-        return 'text-green-400';
-      case 'LOGIN_FAILED':
-        return 'text-red-400';
-      case 'LOGOUT':
-        return 'text-orange-400';
-      default:
-        return 'text-slate-300';
+  const getLevelColor = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'error': return 'text-red-400 bg-red-900/20 border-red-500/30';
+      case 'warn': case 'warning': return 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30';
+      case 'info': return 'text-blue-400 bg-blue-900/20 border-blue-500/30';
+      case 'debug': return 'text-gray-400 bg-gray-900/20 border-gray-500/30';
+      default: return 'text-slate-400 bg-slate-900/20 border-slate-500/30';
     }
-  };
-
-  const getLogLevelColor = (level: string) => {
-    switch (level) {
-      case 'ERROR':
-        return 'text-red-400';
-      case 'WARN':
-        return 'text-yellow-400';
-      case 'INFO':
-        return 'text-blue-400';
-      case 'DEBUG':
-        return 'text-cyan-400';
-      default:
-        return 'text-slate-300';
-    }
-  };
-
-  const renderLogMessage = (log: BackendLog, index: number) => {
-    const isExpanded = expandedLogs.has(index);
-    const formattedMessage = formatLogText(log.message);
-    
-    if (typeof formattedMessage === 'string') {
-      return (
-        <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
-          {formattedMessage}
-        </pre>
-      );
-    }
-
-    return (
-      <div>
-        <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono leading-relaxed">
-          {isExpanded ? formattedMessage.full : formattedMessage.preview}
-        </pre>
-        <Button
-          onClick={() => toggleLogExpansion(index)}
-          variant="ghost"
-          size="sm"
-          className="mt-2 h-6 px-2 text-xs text-cyan-400 hover:text-cyan-300"
-        >
-          {isExpanded ? (
-            <>
-              <EyeOff className="w-3 h-3 mr-1" />
-              Mostrar menos
-            </>
-          ) : (
-            <>
-              <Eye className="w-3 h-3 mr-1" />
-              Ver completo
-            </>
-          )}
-        </Button>
-      </div>
-    );
   };
 
   return (
     <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
       <CardHeader>
-        <CardTitle className="text-xl text-cyan-400 flex items-center">
-          <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-          Logs do Sistema
+        <CardTitle className="text-xl text-cyan-400 flex items-center justify-between">
+          <div className="flex items-center">
+            <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
+            Logs do Sistema
+          </div>
+          <Button
+            onClick={() => { loadFrontendLogs(); loadBackendLogs(); }}
+            variant="outline"
+            size="sm"
+            className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
+            disabled={isLoading}
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+            Atualizar
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <Tabs defaultValue="system" className="w-full">
+        <Tabs defaultValue="frontend" className="w-full">
           <TabsList className="grid w-full grid-cols-2 bg-slate-700/50">
-            <TabsTrigger value="system" className="data-[state=active]:bg-cyan-500/20">
-              <Monitor className="w-4 h-4 mr-2" />
-              Sistema
+            <TabsTrigger value="frontend" className="data-[state=active]:bg-cyan-500/20">
+              Frontend ({frontendLogs.length})
             </TabsTrigger>
             <TabsTrigger value="backend" className="data-[state=active]:bg-cyan-500/20">
-              <Server className="w-4 h-4 mr-2" />
-              Backend
+              Backend ({backendLogs.length})
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="system" className="mt-4">
-            <div className="flex justify-end gap-2 mb-4">
+          <TabsContent value="frontend" className="mt-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-slate-200">Logs do Frontend</h3>
               <Button
-                onClick={() => exportLogs('system')}
+                onClick={() => exportLogs('frontend')}
                 variant="outline"
                 size="sm"
-                className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
+                className="border-green-500/50 text-green-400 hover:bg-green-500/20"
               >
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
               </Button>
-              <Button
-                onClick={clearSystemLogs}
-                variant="outline"
-                size="sm"
-                className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Limpar
-              </Button>
             </div>
 
-            <ScrollArea className="h-96 w-full">
-              {systemLogs.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-slate-400">
-                  <FileText className="w-8 h-8 mr-2" />
-                  Nenhum log do sistema disponível
-                </div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {frontendLogs.length === 0 ? (
+                <p className="text-slate-400 text-center py-4">Nenhum log encontrado</p>
               ) : (
-                <div className="space-y-2">
-                  {systemLogs.map((log, index) => (
-                    <div key={index} className="p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
-                      <div className="flex items-center justify-between mb-1">
-                        <span className={`font-medium ${getActionColor(log.action)}`}>
+                frontendLogs.map((log, index) => (
+                  <div
+                    key={index}
+                    className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center space-x-2">
+                        <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/50">
                           {log.action}
-                        </span>
+                        </Badge>
                         <span className="text-xs text-slate-400">
-                          {new Date(log.timestamp).toLocaleString('pt-BR')}
+                          {new Date(log.timestamp).toLocaleString()}
+                        </span>
+                        <span className="text-xs text-cyan-400">
+                          Usuário: {log.user}
                         </span>
                       </div>
-                      <div className="text-sm text-slate-300">
-                        Usuário: <span className="text-cyan-400">{log.user}</span>
-                      </div>
-                      {log.details && (
-                        <div className="text-xs text-slate-400 mt-1 font-mono bg-slate-800/50 p-2 rounded">
-                          {JSON.stringify(log.details, null, 2)}
-                        </div>
-                      )}
                     </div>
-                  ))}
-                </div>
+                    <pre className="text-sm text-slate-300 whitespace-pre-wrap overflow-x-auto">
+                      {JSON.stringify(log.details, null, 2)}
+                    </pre>
+                  </div>
+                ))
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
 
           <TabsContent value="backend" className="mt-4">
-            <div className="flex justify-end gap-2 mb-4">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-semibold text-slate-200">Logs do Backend</h3>
               <Button
                 onClick={() => exportLogs('backend')}
                 variant="outline"
                 size="sm"
-                className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
+                className="border-green-500/50 text-green-400 hover:bg-green-500/20"
               >
                 <Download className="w-4 h-4 mr-2" />
                 Exportar
               </Button>
-              <Button
-                onClick={clearBackendLogs}
-                variant="outline"
-                size="sm"
-                className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-              >
-                <Trash2 className="w-4 h-4 mr-2" />
-                Limpar
-              </Button>
             </div>
 
-            <ScrollArea className="h-96 w-full">
-              {loading ? (
-                <div className="flex items-center justify-center h-32 text-slate-400">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-cyan-400"></div>
-                  <span className="ml-2">Carregando logs...</span>
-                </div>
+            <div className="space-y-2 max-h-96 overflow-y-auto">
+              {isLoading ? (
+                <p className="text-slate-400 text-center py-4">Carregando logs...</p>
               ) : backendLogs.length === 0 ? (
-                <div className="flex items-center justify-center h-32 text-slate-400">
-                  <Server className="w-8 h-8 mr-2" />
-                  Nenhum log do backend disponível
-                </div>
+                <p className="text-slate-400 text-center py-4">Nenhum log encontrado</p>
               ) : (
-                <div className="space-y-2">
-                  {backendLogs.map((log, index) => (
-                    <div key={index} className="p-3 bg-slate-700/30 rounded-lg border border-slate-600/30">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className={`font-medium ${getLogLevelColor(log.level)}`}>
-                          [{log.level}] {log.action}
-                        </span>
-                        <span className="text-xs text-slate-400">
-                          {new Date(log.timestamp).toLocaleString('pt-BR')}
-                        </span>
+                backendLogs.map((log, index) => {
+                  const logId = `${log.timestamp}-${index}`;
+                  const isExpanded = expandedLog === logId;
+                  const formattedMessage = formatLogMessage(log);
+                  const isComplexLog = typeof formattedMessage === 'object';
+                  
+                  return (
+                    <div
+                      key={index}
+                      className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center space-x-2">
+                          <Badge 
+                            variant="outline" 
+                            className={`text-xs ${getLevelColor(log.level)}`}
+                          >
+                            {log.level.toUpperCase()}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs text-cyan-400 border-cyan-500/50">
+                            {log.action}
+                          </Badge>
+                          <span className="text-xs text-slate-400">
+                            {new Date(log.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        {isComplexLog && (
+                          <Button
+                            onClick={() => setExpandedLog(isExpanded ? null : logId)}
+                            variant="outline"
+                            size="sm"
+                            className="border-slate-500/50 text-slate-400 hover:bg-slate-600/20"
+                          >
+                            {isExpanded ? <X className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </Button>
+                        )}
                       </div>
                       
-                      {renderLogMessage(log, index)}
-                      
-                      {log.details && (
-                        <div className="text-xs text-slate-400 mt-2 font-mono bg-slate-800/50 p-2 rounded">
-                          <pre className="whitespace-pre-wrap">
-                            {JSON.stringify(log.details, null, 2)}
+                      <div className="text-sm text-slate-300">
+                        {isComplexLog ? (
+                          isExpanded ? (
+                            <div className="space-y-2">{formattedMessage}</div>
+                          ) : (
+                            <div className="space-y-1">
+                              <div>{log.action}</div>
+                              <div className="text-xs text-slate-500">
+                                Clique no botão para ver detalhes completos
+                              </div>
+                            </div>
+                          )
+                        ) : (
+                          <pre className="whitespace-pre-wrap overflow-x-auto">
+                            {typeof formattedMessage === 'string' ? 
+                              (formattedMessage.length > 200 && !isExpanded ? 
+                                truncateMessage(formattedMessage) : formattedMessage
+                              ) : formattedMessage
+                            }
                           </pre>
-                        </div>
-                      )}
+                        )}
+                      </div>
                     </div>
-                  ))}
-                </div>
+                  );
+                })
               )}
-            </ScrollArea>
+            </div>
           </TabsContent>
         </Tabs>
       </CardContent>
