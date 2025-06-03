@@ -1,15 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, FileText, Trash2, Play, Eye, Edit, Save, X, Calendar, Database } from 'lucide-react';
+import { Upload, Download, FileText, Trash2, Eye, Calendar, Database, Terminal } from 'lucide-react';
 
 interface UploadedScript {
   name: string;
-  type: 'date' | 'database';
+  type: 'date' | 'database' | 'custom';
   size: number;
   uploadDate: string;
 }
@@ -19,9 +19,8 @@ const ScriptUpload = () => {
   const [previewContent, setPreviewContent] = useState('');
   const [previewFileName, setPreviewFileName] = useState('');
   const [showPreview, setShowPreview] = useState(false);
-  const [editContent, setEditContent] = useState('');
-  const [editFileName, setEditFileName] = useState('');
-  const [showEdit, setShowEdit] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
+  const [selectedType, setSelectedType] = useState<'date' | 'database' | 'custom'>('custom');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -37,15 +36,85 @@ const ScriptUpload = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar scripts:', error);
-      // Fallback para localStorage
-      const saved = localStorage.getItem('uploadedScripts');
-      if (saved) {
-        setUploadedScripts(JSON.parse(saved));
-      }
+      toast({
+        title: "Erro de conexão",
+        description: `Não foi possível conectar ao servidor (http://localhost:3001/api/scripts)`,
+        variant: "destructive"
+      });
     }
   };
 
-  const handleFileUpload = async (file: File, type: 'date' | 'database') => {
+  const handleMultipleFileUpload = async () => {
+    if (!selectedFiles || selectedFiles.length === 0) {
+      toast({
+        title: "Erro",
+        description: "Por favor, selecione pelo menos um arquivo",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const results = [];
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      
+      if (!file.name.endsWith('.sh') && !file.name.endsWith('.bash')) {
+        toast({
+          title: "Arquivo inválido",
+          description: `${file.name} não é um arquivo .sh ou .bash`,
+          variant: "destructive"
+        });
+        continue;
+      }
+
+      try {
+        const formData = new FormData();
+        formData.append('script', file);
+        formData.append('type', selectedType);
+
+        const response = await fetch('http://localhost:3001/api/upload-script', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          results.push({ success: true, fileName: file.name });
+        } else {
+          results.push({ success: false, fileName: file.name, error: 'Falha no upload' });
+        }
+      } catch (error) {
+        results.push({ success: false, fileName: file.name, error: error instanceof Error ? error.message : 'Erro desconhecido' });
+      }
+    }
+
+    const successCount = results.filter(r => r.success).length;
+    const failCount = results.filter(r => !r.success).length;
+
+    if (successCount > 0) {
+      toast({
+        title: `${successCount} script(s) enviado(s)!`,
+        description: failCount > 0 ? `${failCount} arquivo(s) falharam` : "Todos os scripts foram enviados com sucesso",
+      });
+      await loadUploadedScripts();
+    }
+
+    if (failCount > 0) {
+      const failedFiles = results.filter(r => !r.success).map(r => r.fileName).join(', ');
+      toast({
+        title: "Alguns uploads falharam",
+        description: `Arquivos com erro: ${failedFiles}`,
+        variant: "destructive"
+      });
+    }
+
+    // Limpar seleção
+    setSelectedFiles(null);
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    if (fileInput) fileInput.value = '';
+  };
+
+  const handleFileUpload = async (file: File, type: 'date' | 'database' | 'custom') => {
     if (!file.name.endsWith('.sh') && !file.name.endsWith('.bash')) {
       toast({
         title: "Erro",
@@ -267,68 +336,96 @@ const ScriptUpload = () => {
   };
 
   const getScriptIcon = (type: string) => {
-    return type === 'date' ? <Calendar className="w-5 h-5 text-blue-400" /> : <Database className="w-5 h-5 text-green-400" />;
+    switch (type) {
+      case 'date': return <Calendar className="w-5 h-5 text-blue-400" />;
+      case 'database': return <Database className="w-5 h-5 text-green-400" />;
+      default: return <Terminal className="w-5 h-5 text-purple-400" />;
+    }
   };
 
   const getScriptTypeLabel = (type: string) => {
-    return type === 'date' ? 'Alteração de Data' : 'Restauração de Banco';
+    switch (type) {
+      case 'date': return 'Alteração de Data';
+      case 'database': return 'Restauração de Banco';
+      default: return 'Script Personalizado';
+    }
   };
 
   const getScriptTypeBadgeColor = (type: string) => {
-    return type === 'date' ? 'bg-blue-500/20 text-blue-400 border-blue-500/30' : 'bg-green-500/20 text-green-400 border-green-500/30';
+    switch (type) {
+      case 'date': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'database': return 'bg-green-500/20 text-green-400 border-green-500/30';
+      default: return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+    }
   };
 
   return (
     <div className="space-y-6">
       {/* Upload Section */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Calendar className="w-5 h-5 text-blue-400" />
-            <h3 className="text-lg font-semibold text-blue-400">Script de Alteração de Data</h3>
-          </div>
+      <div className="space-y-4">
+        <div className="flex items-center space-x-2">
+          <Upload className="w-5 h-5 text-cyan-400" />
+          <h3 className="text-lg font-semibold text-cyan-400">Upload de Scripts</h3>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-300">
-              Upload do script Bash (.sh ou .bash)
+              Tipo do Script
             </label>
-            <div className="relative">
-              <Input
-                type="file"
-                accept=".sh,.bash"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file, 'date');
-                }}
-                className="bg-slate-700/50 border-slate-600 text-white file:bg-blue-500 file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:mr-3"
-              />
-              <Upload className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
-            </div>
+            <Select value={selectedType} onValueChange={(value: 'date' | 'database' | 'custom') => setSelectedType(value)}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600">
+                <SelectItem value="custom" className="text-white">Script Personalizado</SelectItem>
+                <SelectItem value="date" className="text-white">Alteração de Data</SelectItem>
+                <SelectItem value="database" className="text-white">Restauração de Banco</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300">
+              Arquivos (.sh ou .bash)
+            </label>
+            <Input
+              type="file"
+              accept=".sh,.bash"
+              multiple
+              onChange={(e) => setSelectedFiles(e.target.files)}
+              className="bg-slate-700/50 border-slate-600 text-white file:bg-cyan-500 file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:mr-3"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300">
+              Ação
+            </label>
+            <Button 
+              onClick={handleMultipleFileUpload}
+              className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold"
+              disabled={!selectedFiles || selectedFiles.length === 0}
+            >
+              <Upload className="w-4 h-4 mr-2" />
+              Enviar {selectedFiles ? selectedFiles.length : 0} Arquivo(s)
+            </Button>
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <Database className="w-5 h-5 text-green-400" />
-            <h3 className="text-lg font-semibold text-green-400">Script de Restauração de Banco</h3>
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              Upload do script Bash (.sh ou .bash)
-            </label>
-            <div className="relative">
-              <Input
-                type="file"
-                accept=".sh,.bash"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file, 'database');
-                }}
-                className="bg-slate-700/50 border-slate-600 text-white file:bg-green-500 file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:mr-3"
-              />
-              <Upload className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+        {selectedFiles && selectedFiles.length > 0 && (
+          <div className="p-3 bg-slate-700/30 rounded-lg border border-cyan-500/30">
+            <p className="text-sm text-slate-300 mb-2">Arquivos selecionados:</p>
+            <div className="space-y-1">
+              {Array.from(selectedFiles).map((file, index) => (
+                <div key={index} className="text-xs text-cyan-400 flex items-center">
+                  <FileText className="w-3 h-3 mr-2" />
+                  {file.name} ({(file.size / 1024).toFixed(1)} KB)
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Uploaded Scripts List */}

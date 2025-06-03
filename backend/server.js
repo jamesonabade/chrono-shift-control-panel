@@ -1,4 +1,3 @@
-
 const express = require('express');
 const multer = require('multer');
 const fs = require('fs');
@@ -14,7 +13,7 @@ let backendLogs = [];
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
 
 // Configuração do multer para upload de scripts
 const storage = multer.diskStorage({
@@ -421,12 +420,182 @@ app.get('/api/check-script/:type', (req, res) => {
   }
 });
 
+// Nova rota para executar comandos personalizados
+app.post('/api/execute-command', (req, res) => {
+  try {
+    const { command, name, description } = req.body;
+    
+    if (!command) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Comando é obrigatório' 
+      });
+    }
+
+    const logFile = `/app/logs/command_${Date.now()}.log`;
+    
+    logAction('info', 'COMMAND_EXECUTION_START', {
+      command,
+      name: name || 'Comando personalizado',
+      description,
+      user: 'system'
+    });
+    
+    exec(command, { 
+      cwd: '/app',
+      env: process.env,
+      uid: 0,
+      gid: 0,
+      shell: '/bin/bash'
+    }, (error, stdout, stderr) => {
+      const logContent = `
+Execution Time: ${new Date().toISOString()}
+Command: ${command}
+Name: ${name || 'Comando personalizado'}
+Description: ${description || 'N/A'}
+User: system
+Exit Code: ${error ? error.code || 1 : 0}
+
+STDOUT:
+${stdout}
+
+STDERR:
+${stderr}
+
+ERROR:
+${error ? error.message : 'None'}
+      `.trim();
+      
+      fs.writeFileSync(logFile, logContent);
+      
+      if (error) {
+        logAction('error', 'COMMAND_EXECUTION_ERROR', {
+          command,
+          name,
+          error: error.message,
+          exitCode: error.code,
+          logFile,
+          stdout,
+          stderr
+        });
+        
+        res.status(500).json({
+          success: false,
+          error: error.message,
+          stderr,
+          stdout,
+          logFile,
+          exitCode: error.code
+        });
+      } else {
+        logAction('info', 'COMMAND_EXECUTION_SUCCESS', {
+          command,
+          name,
+          stdout,
+          stderr,
+          logFile
+        });
+        
+        res.json({
+          success: true,
+          output: stdout,
+          stderr,
+          logFile,
+          message: `${name || 'Comando'} executado com sucesso`
+        });
+      }
+    });
+    
+  } catch (error) {
+    logAction('error', 'COMMAND_EXECUTION_SETUP_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Nova rota para salvar personalizações
+app.post('/api/customizations', (req, res) => {
+  try {
+    const customizations = req.body;
+    const customizationsFile = '/app/data/customizations.json';
+    
+    // Criar diretório se não existir
+    const dataDir = '/app/data';
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(customizationsFile, JSON.stringify(customizations, null, 2));
+    
+    logAction('info', 'CUSTOMIZATIONS_SAVED', { customizations });
+    
+    res.json({ success: true, message: 'Personalizações salvas com sucesso' });
+  } catch (error) {
+    logAction('error', 'CUSTOMIZATIONS_SAVE_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Nova rota para carregar personalizações
+app.get('/api/customizations', (req, res) => {
+  try {
+    const customizationsFile = '/app/data/customizations.json';
+    
+    if (fs.existsSync(customizationsFile)) {
+      const customizations = JSON.parse(fs.readFileSync(customizationsFile, 'utf8'));
+      res.json(customizations);
+    } else {
+      res.json({
+        background: '',
+        logo: '',
+        favicon: '',
+        title: 'PAINEL DE CONTROLE',
+        subtitle: 'Sistema de Gerenciamento Docker'
+      });
+    }
+  } catch (error) {
+    logAction('error', 'CUSTOMIZATIONS_LOAD_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Atualizar mensagens de erro para incluir endereço de conexão
+const enhanceErrorMessage = (error, endpoint) => {
+  const baseUrl = 'http://localhost:3001';
+  return `${error.message} (Tentando conectar em: ${baseUrl}${endpoint})`;
+};
+
+// Atualizar rotas existentes para melhorar mensagens de erro
+app.use((err, req, res, next) => {
+  const errorMessage = enhanceErrorMessage(err, req.path);
+  logAction('error', 'SERVER_ERROR', { 
+    error: errorMessage, 
+    path: req.path,
+    method: req.method,
+    url: `http://localhost:3001${req.path}`
+  });
+  
+  res.status(500).json({ 
+    success: false, 
+    error: errorMessage,
+    endpoint: `http://localhost:3001${req.path}`
+  });
+});
+
 // Iniciar servidor
 app.listen(PORT, '0.0.0.0', () => {
-  logAction('info', 'SERVER_STARTED', { port: PORT, timestamp: new Date().toISOString() });
+  logAction('info', 'SERVER_STARTED', { 
+    port: PORT, 
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      customizations: `http://localhost:${PORT}/api/customizations`,
+      executeCommand: `http://localhost:${PORT}/api/execute-command`,
+      scripts: `http://localhost:${PORT}/api/scripts`,
+      backendLogs: `http://localhost:${PORT}/api/backend-logs`
+    }
+  });
   
   // Criar diretórios necessários
-  const dirs = ['/app/scripts', '/app/logs'];
+  const dirs = ['/app/scripts', '/app/logs', '/app/data'];
   dirs.forEach(dir => {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });

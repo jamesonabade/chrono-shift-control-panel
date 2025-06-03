@@ -15,7 +15,7 @@ WORKDIR /app
 RUN apk add --no-cache bash curl tini sudo
 
 # Criar diretórios necessários
-RUN mkdir -p /app/scripts /app/logs
+RUN mkdir -p /app/scripts /app/logs /app/data
 
 # Copiar arquivos do backend
 COPY package*.json ./
@@ -27,6 +27,7 @@ COPY . .
 # Dar permissões completas
 RUN chmod -R 755 /app/scripts 2>/dev/null || true
 RUN chmod -R 755 /app/logs 2>/dev/null || true
+RUN chmod -R 755 /app/data 2>/dev/null || true
 
 # Expor porta
 EXPOSE 3001

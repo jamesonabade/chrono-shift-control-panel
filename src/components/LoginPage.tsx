@@ -1,10 +1,10 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, User, Lock, Globe } from 'lucide-react';
+import DateTime from '@/components/DateTime';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -66,25 +66,47 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       localStorage.setItem('userPermissions', JSON.stringify(defaultPermissions));
     }
 
-    // Carregar personalizações
-    const loadCustomizations = () => {
-      const savedBackground = localStorage.getItem('loginBackground');
-      const savedLogo = localStorage.getItem('loginLogo');
-      const savedFavicon = localStorage.getItem('loginFavicon');
-      const savedTitle = localStorage.getItem('loginTitle');
-      const savedSubtitle = localStorage.getItem('loginSubtitle');
-      
-      if (savedBackground) setBackgroundImage(savedBackground);
-      if (savedLogo) setLogoImage(savedLogo);
-      if (savedTitle) setTitle(savedTitle);
-      if (savedSubtitle) setSubtitle(savedSubtitle);
-      
-      if (savedFavicon) {
-        const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
-        link.type = 'image/png';
-        link.rel = 'icon';
-        link.href = savedFavicon;
-        document.getElementsByTagName('head')[0].appendChild(link);
+    // Carregar personalizações do servidor
+    const loadCustomizations = async () => {
+      try {
+        const response = await fetch('http://localhost:3001/api/customizations');
+        if (response.ok) {
+          const customizations = await response.json();
+          if (customizations.background) setBackgroundImage(customizations.background);
+          if (customizations.logo) setLogoImage(customizations.logo);
+          if (customizations.title) setTitle(customizations.title);
+          if (customizations.subtitle) setSubtitle(customizations.subtitle);
+          if (customizations.favicon) {
+            const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
+            link.type = 'image/png';
+            link.rel = 'icon';
+            link.href = customizations.favicon;
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+        } else {
+          // Fallback para localStorage se servidor não estiver disponível
+          const savedBackground = localStorage.getItem('loginBackground');
+          const savedLogo = localStorage.getItem('loginLogo');
+          const savedTitle = localStorage.getItem('loginTitle');
+          const savedSubtitle = localStorage.getItem('loginSubtitle');
+          
+          if (savedBackground) setBackgroundImage(savedBackground);
+          if (savedLogo) setLogoImage(savedLogo);
+          if (savedTitle) setTitle(savedTitle);
+          if (savedSubtitle) setSubtitle(savedSubtitle);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar personalizações:', error);
+        // Fallback para localStorage
+        const savedBackground = localStorage.getItem('loginBackground');
+        const savedLogo = localStorage.getItem('loginLogo');
+        const savedTitle = localStorage.getItem('loginTitle');
+        const savedSubtitle = localStorage.getItem('loginSubtitle');
+        
+        if (savedBackground) setBackgroundImage(savedBackground);
+        if (savedLogo) setLogoImage(savedLogo);
+        if (savedTitle) setTitle(savedTitle);
+        if (savedSubtitle) setSubtitle(savedSubtitle);
       }
     };
 
@@ -187,6 +209,11 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       
       {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDU5LCAxMzAsIDI0NiwgMC4xKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
+      
+      {/* Data e hora no canto superior direito */}
+      <div className="absolute top-4 right-4 z-20">
+        <DateTime className="text-white bg-slate-800/50 backdrop-blur-lg rounded-lg px-3 py-2" />
+      </div>
       
       <Card className="w-full max-w-md mx-4 bg-slate-800/90 backdrop-blur-lg border-cyan-500/30 shadow-2xl shadow-cyan-500/20 relative z-10">
         <CardHeader className="space-y-4 pb-6">

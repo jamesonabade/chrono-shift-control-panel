@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, Calendar, Database, Upload, Users, FileText, Globe } from 'lucide-react';
+import { LogOut, Calendar, Database, Upload, Users, FileText, Globe, Terminal } from 'lucide-react';
 import DateSelector from '@/components/DateSelector';
 import DatabaseRestore from '@/components/DatabaseRestore';
 import ScriptUpload from '@/components/ScriptUpload';
 import UserManagement from '@/components/UserManagement';
 import SystemLogs from '@/components/SystemLogs';
+import CommandManager from '@/components/CommandManager';
+import DateTime from '@/components/DateTime';
 
 interface DashboardProps {
   onLogout: () => void;
@@ -96,6 +98,7 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
 
   // Definir abas baseadas nas permissões
   const getAllTabs = () => [
+    { value: 'commands', label: 'Comandos', icon: Terminal, permission: 'scripts' },
     { value: 'date', label: 'Data', icon: Calendar, permission: 'date' },
     { value: 'database', label: 'Banco', icon: Database, permission: 'database' },
     { value: 'scripts', label: 'Scripts', icon: Upload, permission: 'scripts' },
@@ -162,20 +165,23 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
               </p>
             </div>
           </div>
-          <Button 
-            onClick={handleLogout}
-            variant="outline"
-            className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-400"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
-            Sair
-          </Button>
+          <div className="flex items-center space-x-4">
+            <DateTime />
+            <Button 
+              onClick={handleLogout}
+              variant="outline"
+              className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-400"
+            >
+              <LogOut className="w-4 h-4 mr-2" />
+              Sair
+            </Button>
+          </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="relative z-10 container mx-auto px-4 py-8">
-        <Tabs defaultValue={userTabs[0]?.value || 'date'} className="w-full">
+        <Tabs defaultValue={userTabs[0]?.value || 'commands'} className="w-full">
           <TabsList className="grid w-full bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30" style={{ gridTemplateColumns: `repeat(${userTabs.length}, 1fr)` }}>
             {userTabs.map((tab) => (
               <TabsTrigger 
@@ -188,6 +194,22 @@ const Dashboard = ({ onLogout }: DashboardProps) => {
               </TabsTrigger>
             ))}
           </TabsList>
+
+          {permissions.scripts && (
+            <TabsContent value="commands" className="mt-6">
+              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
+                <CardHeader>
+                  <CardTitle className="text-xl text-cyan-400 flex items-center">
+                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
+                    Comandos Personalizados
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <CommandManager />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
           {permissions.date && (
             <TabsContent value="date" className="mt-6">

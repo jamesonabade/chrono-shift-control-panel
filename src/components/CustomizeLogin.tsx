@@ -11,28 +11,84 @@ interface CustomizeLoginProps {
 }
 
 const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
-  const [backgroundImage, setBackgroundImage] = useState(localStorage.getItem('loginBackground') || '');
-  const [logo, setLogo] = useState(localStorage.getItem('loginLogo') || '');
-  const [favicon, setFavicon] = useState(localStorage.getItem('loginFavicon') || '');
-  const [title, setTitle] = useState(localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE');
-  const [subtitle, setSubtitle] = useState(localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker');
+  const [backgroundImage, setBackgroundImage] = useState('');
+  const [logo, setLogo] = useState('');
+  const [favicon, setFavicon] = useState('');
+  const [title, setTitle] = useState('PAINEL DE CONTROLE');
+  const [subtitle, setSubtitle] = useState('Sistema de Gerenciamento Docker');
   const { toast } = useToast();
 
   useEffect(() => {
     if (show) {
-      const savedBackground = localStorage.getItem('loginBackground') || '';
-      const savedLogo = localStorage.getItem('loginLogo') || '';
-      const savedFavicon = localStorage.getItem('loginFavicon') || '';
-      const savedTitle = localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE';
-      const savedSubtitle = localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker';
-      
-      setBackgroundImage(savedBackground);
-      setLogo(savedLogo);
-      setFavicon(savedFavicon);
-      setTitle(savedTitle);
-      setSubtitle(savedSubtitle);
+      loadCustomizations();
     }
   }, [show]);
+
+  const loadCustomizations = async () => {
+    try {
+      const response = await fetch('http://localhost:3001/api/customizations');
+      if (response.ok) {
+        const customizations = await response.json();
+        setBackgroundImage(customizations.background || '');
+        setLogo(customizations.logo || '');
+        setFavicon(customizations.favicon || '');
+        setTitle(customizations.title || 'PAINEL DE CONTROLE');
+        setSubtitle(customizations.subtitle || 'Sistema de Gerenciamento Docker');
+      } else {
+        // Fallback para localStorage
+        setBackgroundImage(localStorage.getItem('loginBackground') || '');
+        setLogo(localStorage.getItem('loginLogo') || '');
+        setFavicon(localStorage.getItem('loginFavicon') || '');
+        setTitle(localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE');
+        setSubtitle(localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar personalizações:', error);
+      // Fallback para localStorage
+      setBackgroundImage(localStorage.getItem('loginBackground') || '');
+      setLogo(localStorage.getItem('loginLogo') || '');
+      setFavicon(localStorage.getItem('loginFavicon') || '');
+      setTitle(localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE');
+      setSubtitle(localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker');
+    }
+  };
+
+  const saveCustomizations = async (data: any) => {
+    try {
+      const response = await fetch('http://localhost:3001/api/customizations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+      });
+
+      if (!response.ok) {
+        throw new Error('Falha ao salvar no servidor');
+      }
+
+      toast({
+        title: "Personalização salva!",
+        description: "Alterações aplicadas globalmente",
+      });
+    } catch (error) {
+      console.error('Erro ao salvar personalizações:', error);
+      // Fallback para localStorage
+      Object.entries(data).forEach(([key, value]) => {
+        if (value) {
+          localStorage.setItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`, value as string);
+        } else {
+          localStorage.removeItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`);
+        }
+      });
+
+      toast({
+        title: "Salvo localmente",
+        description: "Servidor indisponível, salvo apenas neste navegador",
+        variant: "destructive"
+      });
+    }
+  };
 
   if (!show) return null;
 
@@ -47,29 +103,20 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       const result = e.target?.result as string;
+      
       if (type === 'background') {
         setBackgroundImage(result);
-        localStorage.setItem('loginBackground', result);
+        await saveCustomizations({ background: result, logo, favicon, title, subtitle });
       } else if (type === 'logo') {
         setLogo(result);
-        localStorage.setItem('loginLogo', result);
+        await saveCustomizations({ background: backgroundImage, logo: result, favicon, title, subtitle });
       } else if (type === 'favicon') {
         setFavicon(result);
-        localStorage.setItem('loginFavicon', result);
         updateFavicon(result);
+        await saveCustomizations({ background: backgroundImage, logo, favicon: result, title, subtitle });
       }
-      
-      window.dispatchEvent(new StorageEvent('storage', {
-        key: `login${type.charAt(0).toUpperCase() + type.slice(1)}`,
-        newValue: result
-      }));
-      
-      toast({
-        title: "Imagem carregada!",
-        description: `${type === 'background' ? 'Papel de parede' : type === 'logo' ? 'Logo' : 'Favicon'} atualizado`,
-      });
     };
     reader.readAsDataURL(file);
   };
@@ -82,44 +129,31 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
     document.getElementsByTagName('head')[0].appendChild(link);
   };
 
-  const handleTitleChange = (newTitle: string) => {
+  const handleTitleChange = async (newTitle: string) => {
     setTitle(newTitle);
-    localStorage.setItem('loginTitle', newTitle);
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'loginTitle',
-      newValue: newTitle
-    }));
+    await saveCustomizations({ background: backgroundImage, logo, favicon, title: newTitle, subtitle });
   };
 
-  const handleSubtitleChange = (newSubtitle: string) => {
+  const handleSubtitleChange = async (newSubtitle: string) => {
     setSubtitle(newSubtitle);
-    localStorage.setItem('loginSubtitle', newSubtitle);
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'loginSubtitle',
-      newValue: newSubtitle
-    }));
+    await saveCustomizations({ background: backgroundImage, logo, favicon, title, subtitle: newSubtitle });
   };
 
-  const removeImage = (type: 'background' | 'logo' | 'favicon') => {
+  const removeImage = async (type: 'background' | 'logo' | 'favicon') => {
     if (type === 'background') {
       setBackgroundImage('');
-      localStorage.removeItem('loginBackground');
+      await saveCustomizations({ background: '', logo, favicon, title, subtitle });
     } else if (type === 'logo') {
       setLogo('');
-      localStorage.removeItem('loginLogo');
+      await saveCustomizations({ background: backgroundImage, logo: '', favicon, title, subtitle });
     } else if (type === 'favicon') {
       setFavicon('');
-      localStorage.removeItem('loginFavicon');
       const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
       if (link) {
         link.href = '/favicon.ico';
       }
+      await saveCustomizations({ background: backgroundImage, logo, favicon: '', title, subtitle });
     }
-    
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: `login${type.charAt(0).toUpperCase() + type.slice(1)}`,
-      newValue: null
-    }));
     
     toast({
       title: "Imagem removida!",
