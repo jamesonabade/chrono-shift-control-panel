@@ -580,17 +580,62 @@ app.get('/api/customizations', (req, res) => {
   }
 });
 
-// Atualizar middleware de erro para incluir informações de endpoint
+// Nova rota para salvar variáveis do sistema
+app.post('/api/system-variables', (req, res) => {
+  try {
+    const variables = req.body;
+    const variablesFile = '/app/data/system-variables.json';
+    
+    // Criar diretório se não existir
+    const dataDir = '/app/data';
+    if (!fs.existsSync(dataDir)) {
+      fs.mkdirSync(dataDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(variablesFile, JSON.stringify(variables, null, 2));
+    
+    logAction('info', 'SYSTEM_VARIABLES_SAVED', { variables });
+    
+    res.json({ success: true, message: 'Variáveis do sistema salvas com sucesso' });
+  } catch (error) {
+    logAction('error', 'SYSTEM_VARIABLES_SAVE_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Nova rota para carregar variáveis do sistema
+app.get('/api/system-variables', (req, res) => {
+  try {
+    const variablesFile = '/app/data/system-variables.json';
+    
+    if (fs.existsSync(variablesFile)) {
+      const variables = JSON.parse(fs.readFileSync(variablesFile, 'utf8'));
+      res.json(variables);
+    } else {
+      res.json({
+        date: {},
+        database: {}
+      });
+    }
+  } catch (error) {
+    logAction('error', 'SYSTEM_VARIABLES_LOAD_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Atualizar middleware de erro para incluir informações de endpoint mais detalhadas
 app.use((err, req, res, next) => {
   const endpoint = `http://localhost:3001${req.path}`;
-  const errorMessage = `${err.message} (Tentando conectar em: ${endpoint})`;
+  const errorMessage = `${err.message} (Falha ao conectar em: ${endpoint})`;
   
   logAction('error', 'SERVER_ERROR', { 
     error: errorMessage, 
     path: req.path,
     method: req.method,
     endpoint,
-    stack: err.stack
+    stack: err.stack,
+    userAgent: req.get('User-Agent'),
+    ip: req.ip
   });
   
   res.status(500).json({ 
@@ -598,7 +643,8 @@ app.use((err, req, res, next) => {
     error: errorMessage,
     endpoint,
     path: req.path,
-    method: req.method
+    method: req.method,
+    timestamp: new Date().toISOString()
   });
 });
 

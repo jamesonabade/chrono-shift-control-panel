@@ -3,8 +3,9 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Download, Eye, AlertCircle, CheckCircle, XCircle, Terminal } from 'lucide-react';
+import { FileText, Download, Eye, AlertCircle, CheckCircle, XCircle, Terminal, Server, MonitorSpeaker } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -15,25 +16,27 @@ interface LogEntry {
 }
 
 const SystemLogs = () => {
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [backendLogs, setBackendLogs] = useState<LogEntry[]>([]);
+  const [frontendLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [showDetails, setShowDetails] = useState(false);
+  const [activeTab, setActiveTab] = useState('backend');
   const { toast } = useToast();
 
   useEffect(() => {
-    loadLogs();
-    const interval = setInterval(loadLogs, 5000); // Atualiza a cada 5 segundos
+    loadBackendLogs();
+    const interval = setInterval(loadBackendLogs, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  const loadLogs = async () => {
+  const loadBackendLogs = async () => {
     setIsLoading(true);
     try {
       const response = await fetch('http://localhost:3001/api/backend-logs');
       if (response.ok) {
         const data = await response.json();
-        setLogs(data);
+        setBackendLogs(data);
       } else {
         throw new Error('Falha ao carregar logs');
       }
@@ -41,7 +44,7 @@ const SystemLogs = () => {
       console.error('Erro ao carregar logs:', error);
       toast({
         title: "Erro",
-        description: `Erro ao carregar logs do sistema (http://localhost:3001/api/backend-logs)`,
+        description: `Erro ao carregar logs do backend (http://localhost:3001/api/backend-logs)`,
         variant: "destructive"
       });
     } finally {
@@ -49,7 +52,7 @@ const SystemLogs = () => {
     }
   };
 
-  const downloadLogs = () => {
+  const downloadLogs = (logs: LogEntry[], type: string) => {
     const logContent = logs.map(log => 
       `${log.timestamp} - [${log.level}] ${log.action}: ${JSON.stringify(log.details, null, 2)}`
     ).join('\n');
@@ -58,7 +61,7 @@ const SystemLogs = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `system-logs-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.download = `${type}-logs-${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -66,7 +69,7 @@ const SystemLogs = () => {
 
     toast({
       title: "Download concluído!",
-      description: "Logs salvos com sucesso",
+      description: `Logs ${type} salvos com sucesso`,
     });
   };
 
@@ -86,11 +89,6 @@ const SystemLogs = () => {
       case 'warn': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
       default: return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
     }
-  };
-
-  const formatLogDetails = (details: any) => {
-    if (typeof details === 'string') return details;
-    return JSON.stringify(details, null, 2);
   };
 
   const hasExecutionOutput = (details: any) => {
@@ -137,18 +135,6 @@ const SystemLogs = () => {
             </pre>
           </div>
         )}
-
-        {details.environment && (
-          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
-            <div className="flex items-center mb-2">
-              <Terminal className="w-4 h-4 text-purple-400 mr-2" />
-              <span className="text-purple-400 font-semibold">VARIÁVEIS DE AMBIENTE</span>
-            </div>
-            <pre className="text-sm text-purple-300 whitespace-pre-wrap font-mono bg-purple-900/20 p-2 rounded">
-              {JSON.stringify(details.environment, null, 2)}
-            </pre>
-          </div>
-        )}
       </div>
     );
   };
@@ -158,29 +144,36 @@ const SystemLogs = () => {
     setShowDetails(true);
   };
 
-  return (
+  const renderLogList = (logs: LogEntry[], type: string) => (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-2">
-          <FileText className="w-5 h-5 text-cyan-400" />
-          <h3 className="text-lg font-semibold text-cyan-400">Logs do Sistema</h3>
+          {type === 'backend' ? 
+            <Server className="w-5 h-5 text-cyan-400" /> : 
+            <MonitorSpeaker className="w-5 h-5 text-purple-400" />
+          }
+          <h3 className="text-lg font-semibold text-cyan-400">
+            Logs do {type === 'backend' ? 'Backend' : 'Frontend'}
+          </h3>
         </div>
         <div className="flex space-x-2">
+          {type === 'backend' && (
+            <Button
+              onClick={loadBackendLogs}
+              disabled={isLoading}
+              variant="outline"
+              size="sm"
+              className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
+            >
+              {isLoading ? (
+                <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+              ) : (
+                'Atualizar'
+              )}
+            </Button>
+          )}
           <Button
-            onClick={loadLogs}
-            disabled={isLoading}
-            variant="outline"
-            size="sm"
-            className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
-          >
-            {isLoading ? (
-              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              'Atualizar'
-            )}
-          </Button>
-          <Button
-            onClick={downloadLogs}
+            onClick={() => downloadLogs(logs, type)}
             disabled={logs.length === 0}
             variant="outline"
             size="sm"
@@ -211,7 +204,6 @@ const SystemLogs = () => {
                     </span>
                   </div>
                   
-                  {/* Resumo da ação */}
                   <p className="text-sm mb-2 opacity-90">
                     {typeof log.details === 'string' ? log.details : 
                      log.details?.scriptName ? `Script: ${log.details.scriptName}` :
@@ -220,12 +212,11 @@ const SystemLogs = () => {
                      'Operação do sistema'}
                   </p>
 
-                  {/* Preview de stdout/stderr se existir */}
                   {hasExecutionOutput(log.details) && (
                     <div className="mt-2 space-y-1">
                       {log.details.stdout && (
                         <div className="text-xs">
-                          <span className="text-green-400">✓ STDOUT:</span>
+                          <span className="text-green-400 font-semibold">✓ STDOUT:</span>
                           <span className="ml-2 opacity-75">
                             {log.details.stdout.slice(0, 100)}{log.details.stdout.length > 100 ? '...' : ''}
                           </span>
@@ -233,7 +224,7 @@ const SystemLogs = () => {
                       )}
                       {log.details.stderr && (
                         <div className="text-xs">
-                          <span className="text-red-400">✗ STDERR:</span>
+                          <span className="text-red-400 font-semibold">✗ STDERR:</span>
                           <span className="ml-2 opacity-75">
                             {log.details.stderr.slice(0, 100)}{log.details.stderr.length > 100 ? '...' : ''}
                           </span>
@@ -256,8 +247,32 @@ const SystemLogs = () => {
           ))}
         </div>
       )}
+    </div>
+  );
 
-      {/* Dialog para detalhes completos do log */}
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="backend" className="flex items-center gap-2">
+            <Server className="w-4 h-4" />
+            Backend
+          </TabsTrigger>
+          <TabsTrigger value="frontend" className="flex items-center gap-2">
+            <MonitorSpeaker className="w-4 h-4" />
+            Frontend
+          </TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="backend">
+          {renderLogList(backendLogs, 'backend')}
+        </TabsContent>
+        
+        <TabsContent value="frontend">
+          {renderLogList(frontendLogs, 'frontend')}
+        </TabsContent>
+      </Tabs>
+
       <Dialog open={showDetails} onOpenChange={setShowDetails}>
         <DialogContent className="max-w-6xl max-h-[90vh] bg-slate-800 border-cyan-500/30">
           <DialogHeader>
@@ -283,15 +298,13 @@ const SystemLogs = () => {
                 </div>
               </div>
 
-              {/* Saídas de execução destacadas */}
               {renderExecutionOutput(selectedLog.details)}
 
-              {/* Detalhes completos */}
               <div className="bg-slate-900/50 p-4 rounded-lg">
                 <h4 className="text-slate-300 mb-2">Detalhes Completos:</h4>
                 <ScrollArea className="h-60 w-full">
                   <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">
-                    {formatLogDetails(selectedLog.details)}
+                    {JSON.stringify(selectedLog.details, null, 2)}
                   </pre>
                 </ScrollArea>
               </div>

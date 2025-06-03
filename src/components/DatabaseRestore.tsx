@@ -3,12 +3,12 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Database, Play, Settings } from 'lucide-react';
 
 const DatabaseRestore = () => {
-  const [databaseUrl, setDatabaseUrl] = useState('');
-  const [backupPath, setBackupPath] = useState('');
+  const [environment, setEnvironment] = useState('');
   const [databaseCommand, setDatabaseCommand] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
@@ -47,10 +47,10 @@ const DatabaseRestore = () => {
       return;
     }
 
-    if (!databaseUrl) {
+    if (!environment) {
       toast({
         title: "Dados incompletos",
-        description: "Por favor, informe a URL do banco de dados",
+        description: "Por favor, selecione o ambiente",
         variant: "destructive"
       });
       return;
@@ -59,11 +59,13 @@ const DatabaseRestore = () => {
     setIsExecuting(true);
 
     try {
-      const environment = {
-        DATABASE_URL: databaseUrl,
-        BACKUP_PATH: backupPath || '/app/backups/backup.sql',
-        DB_HOST: databaseUrl.includes('@') ? databaseUrl.split('@')[1].split(':')[0] : '',
-        DB_NAME: databaseUrl.includes('/') ? databaseUrl.split('/').pop() : ''
+      // Carregar variáveis fixas do sistema se existirem
+      const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
+      
+      const envVariables = {
+        ENVIRONMENT: environment,
+        ENV: environment,
+        ...systemVars.database
       };
 
       const response = await fetch('http://localhost:3001/api/execute-command', {
@@ -74,8 +76,8 @@ const DatabaseRestore = () => {
         body: JSON.stringify({
           command: databaseCommand,
           name: 'Restaurar Banco',
-          description: `Restaurar banco de dados: ${databaseUrl}`,
-          environment
+          description: `Restaurar banco de dados - Ambiente: ${environment}`,
+          environment: envVariables
         })
       });
 
@@ -84,7 +86,7 @@ const DatabaseRestore = () => {
       if (result.success) {
         toast({
           title: "Banco restaurado!",
-          description: "Restauração concluída com sucesso",
+          description: `Restauração concluída no ambiente ${environment}`,
         });
       } else {
         toast({
@@ -114,27 +116,16 @@ const DatabaseRestore = () => {
       
       <div className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="database-url" className="text-slate-300">URL do Banco de Dados</Label>
-          <Input
-            id="database-url"
-            type="text"
-            value={databaseUrl}
-            onChange={(e) => setDatabaseUrl(e.target.value)}
-            placeholder="postgresql://user:pass@host:port/database"
-            className="bg-slate-700/50 border-slate-600 text-white"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="backup-path" className="text-slate-300">Caminho do Backup (opcional)</Label>
-          <Input
-            id="backup-path"
-            type="text"
-            value={backupPath}
-            onChange={(e) => setBackupPath(e.target.value)}
-            placeholder="/app/backups/backup.sql"
-            className="bg-slate-700/50 border-slate-600 text-white"
-          />
+          <Label htmlFor="environment" className="text-slate-300">Ambiente</Label>
+          <Select value={environment} onValueChange={setEnvironment}>
+            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+              <SelectValue placeholder="Selecione o ambiente" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="DEV">DEV</SelectItem>
+              <SelectItem value="TESTES">TESTES</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">
@@ -159,7 +150,7 @@ const DatabaseRestore = () => {
 
       <Button 
         onClick={executeCommand}
-        disabled={!databaseUrl || isExecuting}
+        disabled={!environment || isExecuting}
         className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-semibold py-3"
       >
         {isExecuting ? (
@@ -170,13 +161,10 @@ const DatabaseRestore = () => {
         {isExecuting ? 'Restaurando...' : 'Restaurar Banco'}
       </Button>
 
-      {databaseUrl && (
+      {environment && (
         <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
           <p className="text-green-300 text-sm">
-            <strong>Banco:</strong> {databaseUrl}
-          </p>
-          <p className="text-green-300 text-sm">
-            <strong>Backup:</strong> {backupPath || '/app/backups/backup.sql'}
+            <strong>Ambiente:</strong> {environment}
           </p>
           <p className="text-green-300 text-sm">
             <strong>Comando:</strong> {databaseCommand}
