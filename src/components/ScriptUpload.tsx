@@ -1,11 +1,13 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, FileText, Trash2, Eye, Calendar, Database, Terminal } from 'lucide-react';
+import { Upload, Download, FileText, Trash2, Eye, Calendar, Database, Terminal, Play, Edit, Save, X } from 'lucide-react';
 
 interface UploadedScript {
   name: string;
@@ -19,6 +21,9 @@ const ScriptUpload = () => {
   const [previewContent, setPreviewContent] = useState('');
   const [previewFileName, setPreviewFileName] = useState('');
   const [showPreview, setShowPreview] = useState(false);
+  const [editContent, setEditContent] = useState('');
+  const [editFileName, setEditFileName] = useState('');
+  const [showEdit, setShowEdit] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
   const [selectedType, setSelectedType] = useState<'date' | 'database' | 'custom'>('custom');
   const { toast } = useToast();
