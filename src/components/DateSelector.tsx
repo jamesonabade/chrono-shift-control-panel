@@ -4,56 +4,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { Calendar, Play, Settings } from 'lucide-react';
+import { Calendar, Play } from 'lucide-react';
 
 const DateSelector = () => {
-  const [selectedDate, setSelectedDate] = useState('');
-  const [dateCommand, setDateCommand] = useState('');
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadDateCommand();
-  }, []);
-
-  const loadDateCommand = () => {
-    const saved = localStorage.getItem('dateCommand');
-    if (saved) {
-      setDateCommand(saved);
-    } else {
-      const defaultCommand = 'bash /app/scripts/change_date.sh';
-      setDateCommand(defaultCommand);
-      localStorage.setItem('dateCommand', defaultCommand);
-    }
-  };
-
-  const saveCommand = (command: string) => {
-    setDateCommand(command);
-    localStorage.setItem('dateCommand', command);
-    toast({
-      title: "Comando salvo!",
-      description: "Comando de data foi atualizado",
-    });
-  };
-
   const executeCommand = async () => {
-    if (!dateCommand.trim()) {
-      toast({
-        title: "Erro",
-        description: "Comando não configurado",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!selectedDate) {
+    if (!selectedDay || !selectedMonth) {
       toast({
         title: "Dados incompletos",
-        description: "Por favor, selecione a data",
+        description: "Por favor, selecione o dia e mês",
         variant: "destructive"
       });
       return;
     }
+
+    // Validar dia e mês
+    const day = parseInt(selectedDay);
+    const month = parseInt(selectedMonth);
+    
+    if (day < 1 || day > 31 || month < 1 || month > 12) {
+      toast({
+        title: "Data inválida",
+        description: "Por favor, insira um dia (1-31) e mês (1-12) válidos",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const formattedDate = `${selectedDay.padStart(2, '0')}/${selectedMonth.padStart(2, '0')}`;
 
     setIsExecuting(true);
 
@@ -62,8 +44,10 @@ const DateSelector = () => {
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
       
       const environment = {
-        NEW_DATE: selectedDate,
-        DATE: selectedDate,
+        NEW_DATE: formattedDate,
+        DATE: formattedDate,
+        DAY: selectedDay.padStart(2, '0'),
+        MONTH: selectedMonth.padStart(2, '0'),
         ...systemVars.date
       };
 
@@ -73,9 +57,9 @@ const DateSelector = () => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          command: dateCommand,
+          command: 'bash /app/scripts/change_date.sh',
           name: 'Aplicar Data',
-          description: `Alterar data para ${selectedDate}`,
+          description: `Alterar data para ${formattedDate}`,
           environment
         })
       });
@@ -85,7 +69,7 @@ const DateSelector = () => {
       if (result.success) {
         toast({
           title: "Data aplicada!",
-          description: `Sistema configurado para ${selectedDate}`,
+          description: `Sistema configurado para ${formattedDate}`,
         });
       } else {
         toast({
@@ -114,40 +98,39 @@ const DateSelector = () => {
       </div>
       
       <div className="space-y-4">
-        <div className="space-y-2">
-          <Label htmlFor="date" className="text-slate-300">Data</Label>
-          <Input
-            id="date"
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="bg-slate-700/50 border-slate-600 text-white"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <Label className="text-slate-300">Comando de Execução</Label>
-          <div className="flex gap-2">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="day" className="text-slate-300">Dia</Label>
             <Input
-              value={dateCommand}
-              onChange={(e) => setDateCommand(e.target.value)}
-              placeholder="bash /app/scripts/change_date.sh"
+              id="day"
+              type="number"
+              min="1"
+              max="31"
+              value={selectedDay}
+              onChange={(e) => setSelectedDay(e.target.value)}
+              placeholder="DD"
               className="bg-slate-700/50 border-slate-600 text-white"
             />
-            <Button
-              onClick={() => saveCommand(dateCommand)}
-              variant="outline"
-              className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-            >
-              <Settings className="w-4 h-4" />
-            </Button>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="month" className="text-slate-300">Mês</Label>
+            <Input
+              id="month"
+              type="number"
+              min="1"
+              max="12"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              placeholder="MM"
+              className="bg-slate-700/50 border-slate-600 text-white"
+            />
           </div>
         </div>
       </div>
 
       <Button 
         onClick={executeCommand}
-        disabled={!selectedDate || isExecuting}
+        disabled={!selectedDay || !selectedMonth || isExecuting}
         className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-3"
       >
         {isExecuting ? (
@@ -158,13 +141,10 @@ const DateSelector = () => {
         {isExecuting ? 'Aplicando...' : 'Aplicar Data'}
       </Button>
 
-      {selectedDate && (
+      {selectedDay && selectedMonth && (
         <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <p className="text-blue-300 text-sm">
-            <strong>Nova data:</strong> {selectedDate}
-          </p>
-          <p className="text-blue-300 text-sm">
-            <strong>Comando:</strong> {dateCommand}
+            <strong>Nova data:</strong> {selectedDay.padStart(2, '0')}/{selectedMonth.padStart(2, '0')}
           </p>
         </div>
       )}

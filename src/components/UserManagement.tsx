@@ -70,10 +70,18 @@ const UserManagement = () => {
       });
       
       setUsers(combinedUsers);
+    } else {
+      // Inicializar com dados padrão se não existir
+      const defaultUsers = { administrador: 'admin123' };
+      const defaultPermissions = {};
+      
+      localStorage.setItem('registeredUsers', JSON.stringify(defaultUsers));
+      localStorage.setItem('userPermissions', JSON.stringify(defaultPermissions));
     }
   };
 
   const saveUsers = () => {
+    // Sempre manter o administrador
     const usersData: Record<string, string> = { administrador: 'admin123' };
     const permissionsData: Record<string, any> = {};
     
@@ -244,65 +252,72 @@ const UserManagement = () => {
       </div>
 
       <div className="space-y-4">
-        {Object.entries(users).map(([username, user]) => (
-          <div key={username} className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/30">
-            <div className="flex items-center justify-between mb-4">
-              <h4 className="text-white font-semibold">{username}</h4>
-              <div className="flex space-x-2">
-                <Button
-                  onClick={() => setEditingUser(editingUser === username ? null : username)}
-                  variant="outline"
-                  size="sm"
-                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                >
-                  <Edit className="w-4 h-4" />
-                </Button>
-                <Button
-                  onClick={() => deleteUser(username)}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-
-            {editingUser === username && (
-              <div className="space-y-3 mb-4 p-3 bg-slate-700/30 rounded">
-                <div className="space-y-2">
-                  <Label className="text-slate-300">Nova Senha</Label>
-                  <Input
-                    type="password"
-                    value={user.password}
-                    onChange={(e) => updatePassword(username, e.target.value)}
-                    className="bg-slate-700/50 border-slate-600 text-white"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-              {Object.entries(user.permissions).map(([permission, hasPermission]) => (
-                <div key={permission} className="flex items-center justify-between p-2 bg-slate-700/30 rounded">
-                  <span className="text-slate-300 text-sm capitalize">
-                    {permission === 'commands' ? 'Comandos' : 
-                     permission === 'users' ? 'Usuários' : 
-                     permission === 'logs' ? 'Logs' : 
-                     permission === 'scripts' ? 'Scripts' : 
-                     permission === 'database' ? 'Banco' : 'Data'}
-                  </span>
-                  <Switch
-                    checked={hasPermission}
-                    onCheckedChange={(checked) => 
-                      updatePermission(username, permission as keyof User['permissions'], checked)
-                    }
-                  />
-                </div>
-              ))}
-            </div>
+        {Object.keys(users).length === 0 ? (
+          <div className="text-center text-slate-400 py-8">
+            <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
+            <p>Nenhum usuário cadastrado além do administrador</p>
           </div>
-        ))}
+        ) : (
+          Object.entries(users).map(([username, user]) => (
+            <div key={username} className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/30">
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="text-white font-semibold">{username}</h4>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => setEditingUser(editingUser === username ? null : username)}
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    onClick={() => deleteUser(username)}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {editingUser === username && (
+                <div className="space-y-3 mb-4 p-3 bg-slate-700/30 rounded">
+                  <div className="space-y-2">
+                    <Label className="text-slate-300">Nova Senha</Label>
+                    <Input
+                      type="password"
+                      value={user.password}
+                      onChange={(e) => updatePassword(username, e.target.value)}
+                      className="bg-slate-700/50 border-slate-600 text-white"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                {Object.entries(user.permissions).map(([permission, hasPermission]) => (
+                  <div key={permission} className="flex items-center justify-between p-2 bg-slate-700/30 rounded">
+                    <span className="text-slate-300 text-sm capitalize">
+                      {permission === 'commands' ? 'Comandos' : 
+                       permission === 'users' ? 'Usuários' : 
+                       permission === 'logs' ? 'Logs' : 
+                       permission === 'scripts' ? 'Scripts' : 
+                       permission === 'database' ? 'Banco' : 'Data'}
+                    </span>
+                    <Switch
+                      checked={hasPermission}
+                      onCheckedChange={(checked) => 
+                        updatePermission(username, permission as keyof User['permissions'], checked)
+                      }
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       <Button onClick={saveUsers} className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600">

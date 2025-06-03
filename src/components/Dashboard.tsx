@@ -8,6 +8,7 @@ import UserManagement from '@/components/UserManagement';
 import SystemLogs from '@/components/SystemLogs';
 import CommandManager from '@/components/CommandManager';
 import SystemConfiguration from '@/components/SystemConfiguration';
+import DateTime from '@/components/DateTime';
 
 const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('date');
@@ -126,7 +127,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
     <div className="flex h-screen bg-slate-900 text-white">
       {/* Sidebar */}
       <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
-        <div className="p-4 border-b border-slate-700">
+        <div className="p-4 border-b border-slate-700 flex flex-col space-y-2">
           {customLogo ? (
             <img src={customLogo} alt="Logo" className="h-8 object-contain" />
           ) : (
@@ -134,6 +135,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
               Painel de Controle
             </div>
           )}
+          <DateTime className="text-xs" />
         </div>
         <div className="p-4 space-y-2 flex-1">
           {permissions.date && (
@@ -230,11 +232,15 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
               }`}
             >
               <Settings className="w-4 h-4 mr-2 inline" />
-              Configuração
+              Configurações
             </button>
           )}
         </div>
         <div className="p-4 border-t border-slate-700">
+          <div className="flex items-center space-x-2 mb-2 text-sm text-slate-400">
+            <User className="w-4 h-4" />
+            <span>{currentUser}</span>
+          </div>
           <button
             onClick={onLogout}
             className="w-full px-4 py-2 rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"

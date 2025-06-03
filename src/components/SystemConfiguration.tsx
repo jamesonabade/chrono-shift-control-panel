@@ -3,10 +3,10 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, Save, Plus, Trash2 } from 'lucide-react';
+import { Settings, Save, Plus, Trash2, Palette } from 'lucide-react';
+import CustomizeLogin from '@/components/CustomizeLogin';
 
 const SystemConfiguration = () => {
   const [systemVariables, setSystemVariables] = useState({
@@ -15,7 +15,8 @@ const SystemConfiguration = () => {
   });
   const [newVarKey, setNewVarKey] = useState('');
   const [newVarValue, setNewVarValue] = useState('');
-  const [activeTab, setActiveTab] = useState('date');
+  const [activeTab, setActiveTab] = useState('variables');
+  const [showCustomization, setShowCustomization] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -186,39 +187,80 @@ const SystemConfiguration = () => {
     <div className="space-y-6">
       <div className="flex items-center space-x-2">
         <Settings className="w-5 h-5 text-purple-400" />
-        <h3 className="text-lg font-semibold text-purple-400">Configuração do Sistema</h3>
+        <h3 className="text-lg font-semibold text-purple-400">Configurações do Sistema</h3>
       </div>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="date">Variáveis de Data</TabsTrigger>
-          <TabsTrigger value="database">Variáveis de Banco</TabsTrigger>
+          <TabsTrigger value="variables">Variáveis do Sistema</TabsTrigger>
+          <TabsTrigger value="appearance">Aparência</TabsTrigger>
         </TabsList>
         
-        <TabsContent value="date" className="space-y-4">
-          {renderVariableEditor('date')}
+        <TabsContent value="variables" className="space-y-4">
+          <Tabs defaultValue="date" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="date">Variáveis de Data</TabsTrigger>
+              <TabsTrigger value="database">Variáveis de Banco</TabsTrigger>
+            </TabsList>
+            
+            <TabsContent value="date" className="space-y-4">
+              {renderVariableEditor('date')}
+            </TabsContent>
+            
+            <TabsContent value="database" className="space-y-4">
+              {renderVariableEditor('database')}
+            </TabsContent>
+          </Tabs>
+
+          <Button 
+            onClick={saveSystemVariables}
+            className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-3"
+          >
+            <Save className="w-5 h-5 mr-2" />
+            Salvar Variáveis
+          </Button>
+
+          <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+            <p className="text-yellow-300 text-sm">
+              <strong>Importante:</strong> As variáveis configuradas aqui serão automaticamente incluídas 
+              na execução dos comandos dos botões "Aplicar Data" e "Restaurar Banco". Elas complementam 
+              as variáveis específicas de cada ação (como a data selecionada ou ambiente).
+            </p>
+          </div>
         </TabsContent>
         
-        <TabsContent value="database" className="space-y-4">
-          {renderVariableEditor('database')}
+        <TabsContent value="appearance" className="space-y-4">
+          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center space-x-2">
+                <Palette className="w-5 h-5 text-cyan-400" />
+                <h4 className="text-lg font-semibold text-cyan-400">Personalização Visual</h4>
+              </div>
+              <Button
+                onClick={() => setShowCustomization(!showCustomization)}
+                className="bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600"
+              >
+                {showCustomization ? 'Ocultar' : 'Personalizar'}
+              </Button>
+            </div>
+            
+            {showCustomization && (
+              <div className="mt-4">
+                <CustomizeLogin 
+                  show={showCustomization} 
+                  onClose={() => setShowCustomization(false)} 
+                />
+              </div>
+            )}
+            
+            {!showCustomization && (
+              <p className="text-slate-400 text-sm">
+                Configure papéis de parede, logos, favicons e textos do sistema.
+              </p>
+            )}
+          </div>
         </TabsContent>
       </Tabs>
-
-      <Button 
-        onClick={saveSystemVariables}
-        className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-3"
-      >
-        <Save className="w-5 h-5 mr-2" />
-        Salvar Configurações
-      </Button>
-
-      <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-        <p className="text-yellow-300 text-sm">
-          <strong>Importante:</strong> As variáveis configuradas aqui serão automaticamente incluídas 
-          na execução dos comandos dos botões "Aplicar Data" e "Restaurar Banco". Elas complementam 
-          as variáveis específicas de cada ação (como a data selecionada ou ambiente).
-        </p>
-      </div>
     </div>
   );
 };
