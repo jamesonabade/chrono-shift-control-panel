@@ -12,11 +12,7 @@ USER root
 WORKDIR /app
 
 # Instalar bash, curl e dependências para docker cli funcionar
-RUN apk add --no-cache bash curl tini sudo tzdata
-
-# Configurar timezone
-ENV TZ=America/Bahia
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN apk add --no-cache bash curl tini sudo
 
 # Criar diretórios necessários
 RUN mkdir -p /app/scripts /app/logs
