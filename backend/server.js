@@ -423,12 +423,13 @@ app.get('/api/check-script/:type', (req, res) => {
 // Nova rota para executar comandos personalizados
 app.post('/api/execute-command', (req, res) => {
   try {
-    const { command, name, description } = req.body;
+    const { command, name, description, environment = {} } = req.body;
     
     if (!command) {
       return res.status(400).json({ 
         success: false, 
-        error: 'Comando é obrigatório' 
+        error: 'Comando é obrigatório',
+        endpoint: `http://localhost:3001/api/execute-command`
       });
     }
 
@@ -438,12 +439,17 @@ app.post('/api/execute-command', (req, res) => {
       command,
       name: name || 'Comando personalizado',
       description,
-      user: 'system'
+      environment,
+      user: 'system',
+      endpoint: `http://localhost:3001/api/execute-command`
     });
+    
+    // Preparar variáveis de ambiente
+    const execEnv = { ...process.env, ...environment };
     
     exec(command, { 
       cwd: '/app',
-      env: process.env,
+      env: execEnv,
       uid: 0,
       gid: 0,
       shell: '/bin/bash'
@@ -454,6 +460,7 @@ Command: ${command}
 Name: ${name || 'Comando personalizado'}
 Description: ${description || 'N/A'}
 User: system
+Environment: ${JSON.stringify(environment, null, 2)}
 Exit Code: ${error ? error.code || 1 : 0}
 
 STDOUT:
@@ -476,16 +483,20 @@ ${error ? error.message : 'None'}
           exitCode: error.code,
           logFile,
           stdout,
-          stderr
+          stderr,
+          environment,
+          endpoint: `http://localhost:3001/api/execute-command`
         });
         
         res.status(500).json({
           success: false,
-          error: error.message,
+          error: `${error.message} (Endpoint: http://localhost:3001/api/execute-command)`,
           stderr,
           stdout,
           logFile,
-          exitCode: error.code
+          exitCode: error.code,
+          environment,
+          endpoint: `http://localhost:3001/api/execute-command`
         });
       } else {
         logAction('info', 'COMMAND_EXECUTION_SUCCESS', {
@@ -493,7 +504,9 @@ ${error ? error.message : 'None'}
           name,
           stdout,
           stderr,
-          logFile
+          logFile,
+          environment,
+          endpoint: `http://localhost:3001/api/execute-command`
         });
         
         res.json({
@@ -501,14 +514,23 @@ ${error ? error.message : 'None'}
           output: stdout,
           stderr,
           logFile,
-          message: `${name || 'Comando'} executado com sucesso`
+          message: `${name || 'Comando'} executado com sucesso`,
+          environment,
+          endpoint: `http://localhost:3001/api/execute-command`
         });
       }
     });
     
   } catch (error) {
-    logAction('error', 'COMMAND_EXECUTION_SETUP_ERROR', { error: error.message });
-    res.status(500).json({ success: false, error: error.message });
+    logAction('error', 'COMMAND_EXECUTION_SETUP_ERROR', { 
+      error: error.message,
+      endpoint: `http://localhost:3001/api/execute-command`
+    });
+    res.status(500).json({ 
+      success: false, 
+      error: `${error.message} (Endpoint: http://localhost:3001/api/execute-command)`,
+      endpoint: `http://localhost:3001/api/execute-command`
+    });
   }
 });
 
@@ -558,26 +580,25 @@ app.get('/api/customizations', (req, res) => {
   }
 });
 
-// Atualizar mensagens de erro para incluir endereço de conexão
-const enhanceErrorMessage = (error, endpoint) => {
-  const baseUrl = 'http://localhost:3001';
-  return `${error.message} (Tentando conectar em: ${baseUrl}${endpoint})`;
-};
-
-// Atualizar rotas existentes para melhorar mensagens de erro
+// Atualizar middleware de erro para incluir informações de endpoint
 app.use((err, req, res, next) => {
-  const errorMessage = enhanceErrorMessage(err, req.path);
+  const endpoint = `http://localhost:3001${req.path}`;
+  const errorMessage = `${err.message} (Tentando conectar em: ${endpoint})`;
+  
   logAction('error', 'SERVER_ERROR', { 
     error: errorMessage, 
     path: req.path,
     method: req.method,
-    url: `http://localhost:3001${req.path}`
+    endpoint,
+    stack: err.stack
   });
   
   res.status(500).json({ 
     success: false, 
     error: errorMessage,
-    endpoint: `http://localhost:3001${req.path}`
+    endpoint,
+    path: req.path,
+    method: req.method
   });
 });
 

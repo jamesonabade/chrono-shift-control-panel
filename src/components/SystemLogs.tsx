@@ -1,20 +1,12 @@
 
 import { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
-import { Download, RefreshCw, Eye, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/use-toast';
+import { FileText, Download, Eye, AlertCircle, CheckCircle, XCircle, Terminal } from 'lucide-react';
 
-interface SystemLog {
-  timestamp: string;
-  action: string;
-  details: any;
-  user: string;
-}
-
-interface BackendLog {
+interface LogEntry {
   timestamp: string;
   level: string;
   action: string;
@@ -23,38 +15,33 @@ interface BackendLog {
 }
 
 const SystemLogs = () => {
-  const [frontendLogs, setFrontendLogs] = useState<SystemLog[]>([]);
-  const [backendLogs, setBackendLogs] = useState<BackendLog[]>([]);
+  const [logs, setLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [expandedLog, setExpandedLog] = useState<string | null>(null);
+  const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    loadFrontendLogs();
-    loadBackendLogs();
+    loadLogs();
+    const interval = setInterval(loadLogs, 5000); // Atualiza a cada 5 segundos
+    return () => clearInterval(interval);
   }, []);
 
-  const loadFrontendLogs = () => {
-    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-    setFrontendLogs(logs.reverse());
-  };
-
-  const loadBackendLogs = async () => {
+  const loadLogs = async () => {
     setIsLoading(true);
     try {
-      // Usar a URL correta do backend
       const response = await fetch('http://localhost:3001/api/backend-logs');
       if (response.ok) {
-        const logs = await response.json();
-        setBackendLogs(logs);
+        const data = await response.json();
+        setLogs(data);
       } else {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error('Falha ao carregar logs');
       }
     } catch (error) {
-      console.error('Erro ao carregar logs do backend:', error);
+      console.error('Erro ao carregar logs:', error);
       toast({
         title: "Erro",
-        description: "Não foi possível carregar os logs do backend. Verifique se o backend está rodando.",
+        description: `Erro ao carregar logs do sistema (http://localhost:3001/api/backend-logs)`,
         variant: "destructive"
       });
     } finally {
@@ -62,240 +49,257 @@ const SystemLogs = () => {
     }
   };
 
-  const formatLogMessage = (log: BackendLog) => {
-    if (typeof log.details === 'object' && log.details !== null) {
-      if (log.details.stdout) {
-        return (
-          <div className="space-y-2">
-            <div>
-              <span className="font-medium text-cyan-400">Ação:</span> {log.action}
-            </div>
-            {log.details.scriptName && (
-              <div>
-                <span className="font-medium text-cyan-400">Script:</span> {log.details.scriptName}
-              </div>
-            )}
-            {log.details.stdout && (
-              <div>
-                <span className="font-medium text-green-400">STDOUT:</span>
-                <pre className="mt-1 p-2 bg-green-900/20 border border-green-500/30 rounded text-green-300 whitespace-pre-wrap overflow-x-auto">
-                  {log.details.stdout}
-                </pre>
-              </div>
-            )}
-            {log.details.stderr && (
-              <div>
-                <span className="font-medium text-red-400">STDERR:</span>
-                <pre className="mt-1 p-2 bg-red-900/20 border border-red-500/30 rounded text-red-300 whitespace-pre-wrap overflow-x-auto">
-                  {log.details.stderr}
-                </pre>
-              </div>
-            )}
-            {log.details.error && (
-              <div>
-                <span className="font-medium text-orange-400">Erro:</span> {log.details.error}
-              </div>
-            )}
-          </div>
-        );
-      }
-      return JSON.stringify(log.details, null, 2);
-    }
-    return log.message || String(log.details);
-  };
-
-  const truncateMessage = (message: string, maxLength: number = 200) => {
-    if (message.length <= maxLength) return message;
-    return message.substring(0, maxLength) + '...';
-  };
-
-  const exportLogs = (type: 'frontend' | 'backend') => {
-    const logs = type === 'frontend' ? frontendLogs : backendLogs;
-    const dataStr = JSON.stringify(logs, null, 2);
-    const dataBlob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${type}-logs-${new Date().toISOString().split('T')[0]}.json`;
-    link.click();
+  const downloadLogs = () => {
+    const logContent = logs.map(log => 
+      `${log.timestamp} - [${log.level}] ${log.action}: ${JSON.stringify(log.details, null, 2)}`
+    ).join('\n');
+    
+    const blob = new Blob([logContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `system-logs-${new Date().toISOString().slice(0, 10)}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    toast({
+      title: "Download concluído!",
+      description: "Logs salvos com sucesso",
+    });
+  };
+
+  const getLevelIcon = (level: string) => {
+    switch (level.toLowerCase()) {
+      case 'error': return <XCircle className="w-4 h-4 text-red-400" />;
+      case 'info': return <CheckCircle className="w-4 h-4 text-green-400" />;
+      case 'warn': return <AlertCircle className="w-4 h-4 text-yellow-400" />;
+      default: return <Terminal className="w-4 h-4 text-blue-400" />;
+    }
   };
 
   const getLevelColor = (level: string) => {
     switch (level.toLowerCase()) {
-      case 'error': return 'text-red-400 bg-red-900/20 border-red-500/30';
-      case 'warn': case 'warning': return 'text-yellow-400 bg-yellow-900/20 border-yellow-500/30';
-      case 'info': return 'text-blue-400 bg-blue-900/20 border-blue-500/30';
-      case 'debug': return 'text-gray-400 bg-gray-900/20 border-gray-500/30';
-      default: return 'text-slate-400 bg-slate-900/20 border-slate-500/30';
+      case 'error': return 'text-red-400 bg-red-500/10 border-red-500/30';
+      case 'info': return 'text-green-400 bg-green-500/10 border-green-500/30';
+      case 'warn': return 'text-yellow-400 bg-yellow-500/10 border-yellow-500/30';
+      default: return 'text-blue-400 bg-blue-500/10 border-blue-500/30';
     }
   };
 
-  return (
-    <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-      <CardHeader>
-        <CardTitle className="text-xl text-cyan-400 flex items-center justify-between">
-          <div className="flex items-center">
-            <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-            Logs do Sistema
+  const formatLogDetails = (details: any) => {
+    if (typeof details === 'string') return details;
+    return JSON.stringify(details, null, 2);
+  };
+
+  const hasExecutionOutput = (details: any) => {
+    return details && (details.stdout || details.stderr || details.output);
+  };
+
+  const renderExecutionOutput = (details: any) => {
+    if (!hasExecutionOutput(details)) return null;
+
+    return (
+      <div className="mt-4 space-y-3">
+        {details.stdout && (
+          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
+              <span className="text-green-400 font-semibold">STDOUT (Saída)</span>
+            </div>
+            <pre className="text-sm text-green-300 whitespace-pre-wrap font-mono bg-green-900/20 p-2 rounded">
+              {details.stdout}
+            </pre>
           </div>
+        )}
+        
+        {details.stderr && (
+          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <XCircle className="w-4 h-4 text-red-400 mr-2" />
+              <span className="text-red-400 font-semibold">STDERR (Erro)</span>
+            </div>
+            <pre className="text-sm text-red-300 whitespace-pre-wrap font-mono bg-red-900/20 p-2 rounded">
+              {details.stderr}
+            </pre>
+          </div>
+        )}
+
+        {details.output && !details.stdout && (
+          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <Terminal className="w-4 h-4 text-blue-400 mr-2" />
+              <span className="text-blue-400 font-semibold">OUTPUT</span>
+            </div>
+            <pre className="text-sm text-blue-300 whitespace-pre-wrap font-mono bg-blue-900/20 p-2 rounded">
+              {details.output}
+            </pre>
+          </div>
+        )}
+
+        {details.environment && (
+          <div className="bg-purple-500/10 border border-purple-500/30 rounded-lg p-3">
+            <div className="flex items-center mb-2">
+              <Terminal className="w-4 h-4 text-purple-400 mr-2" />
+              <span className="text-purple-400 font-semibold">VARIÁVEIS DE AMBIENTE</span>
+            </div>
+            <pre className="text-sm text-purple-300 whitespace-pre-wrap font-mono bg-purple-900/20 p-2 rounded">
+              {JSON.stringify(details.environment, null, 2)}
+            </pre>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const showLogDetails = (log: LogEntry) => {
+    setSelectedLog(log);
+    setShowDetails(true);
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <FileText className="w-5 h-5 text-cyan-400" />
+          <h3 className="text-lg font-semibold text-cyan-400">Logs do Sistema</h3>
+        </div>
+        <div className="flex space-x-2">
           <Button
-            onClick={() => { loadFrontendLogs(); loadBackendLogs(); }}
+            onClick={loadLogs}
+            disabled={isLoading}
             variant="outline"
             size="sm"
             className="border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/20"
-            disabled={isLoading}
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
-            Atualizar
+            {isLoading ? (
+              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              'Atualizar'
+            )}
           </Button>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="frontend" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-slate-700/50">
-            <TabsTrigger value="frontend" className="data-[state=active]:bg-cyan-500/20">
-              Frontend ({frontendLogs.length})
-            </TabsTrigger>
-            <TabsTrigger value="backend" className="data-[state=active]:bg-cyan-500/20">
-              Backend ({backendLogs.length})
-            </TabsTrigger>
-          </TabsList>
+          <Button
+            onClick={downloadLogs}
+            disabled={logs.length === 0}
+            variant="outline"
+            size="sm"
+            className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Download
+          </Button>
+        </div>
+      </div>
 
-          <TabsContent value="frontend" className="mt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-200">Logs do Frontend</h3>
-              <Button
-                onClick={() => exportLogs('frontend')}
-                variant="outline"
-                size="sm"
-                className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {frontendLogs.length === 0 ? (
-                <p className="text-slate-400 text-center py-4">Nenhum log encontrado</p>
-              ) : (
-                frontendLogs.map((log, index) => (
-                  <div
-                    key={index}
-                    className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center space-x-2">
-                        <Badge variant="outline" className="text-xs text-blue-400 border-blue-500/50">
-                          {log.action}
-                        </Badge>
-                        <span className="text-xs text-slate-400">
-                          {new Date(log.timestamp).toLocaleString()}
-                        </span>
-                        <span className="text-xs text-cyan-400">
-                          Usuário: {log.user}
-                        </span>
-                      </div>
-                    </div>
-                    <pre className="text-sm text-slate-300 whitespace-pre-wrap overflow-x-auto">
-                      {JSON.stringify(log.details, null, 2)}
-                    </pre>
+      {logs.length === 0 ? (
+        <div className="p-6 bg-slate-700/30 rounded-lg border border-slate-600/30 text-center">
+          <FileText className="w-12 h-12 text-slate-500 mx-auto mb-2" />
+          <p className="text-slate-400">Nenhum log encontrado</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {logs.map((log, index) => (
+            <div key={index} className={`p-4 rounded-lg border ${getLevelColor(log.level)}`}>
+              <div className="flex items-start justify-between">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center space-x-2 mb-2">
+                    {getLevelIcon(log.level)}
+                    <span className="font-semibold">{log.action}</span>
+                    <span className="text-xs opacity-75">
+                      {new Date(log.timestamp).toLocaleString('pt-BR')}
+                    </span>
                   </div>
-                ))
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="backend" className="mt-4">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-semibold text-slate-200">Logs do Backend</h3>
-              <Button
-                onClick={() => exportLogs('backend')}
-                variant="outline"
-                size="sm"
-                className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-              >
-                <Download className="w-4 h-4 mr-2" />
-                Exportar
-              </Button>
-            </div>
-
-            <div className="space-y-2 max-h-96 overflow-y-auto">
-              {isLoading ? (
-                <p className="text-slate-400 text-center py-4">Carregando logs...</p>
-              ) : backendLogs.length === 0 ? (
-                <p className="text-slate-400 text-center py-4">Nenhum log encontrado</p>
-              ) : (
-                backendLogs.map((log, index) => {
-                  const logId = `${log.timestamp}-${index}`;
-                  const isExpanded = expandedLog === logId;
-                  const formattedMessage = formatLogMessage(log);
-                  const isComplexLog = typeof formattedMessage === 'object';
                   
-                  return (
-                    <div
-                      key={index}
-                      className="p-3 bg-slate-700/50 rounded-lg border border-slate-600"
-                    >
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center space-x-2">
-                          <Badge 
-                            variant="outline" 
-                            className={`text-xs ${getLevelColor(log.level)}`}
-                          >
-                            {log.level.toUpperCase()}
-                          </Badge>
-                          <Badge variant="outline" className="text-xs text-cyan-400 border-cyan-500/50">
-                            {log.action}
-                          </Badge>
-                          <span className="text-xs text-slate-400">
-                            {new Date(log.timestamp).toLocaleString()}
+                  {/* Resumo da ação */}
+                  <p className="text-sm mb-2 opacity-90">
+                    {typeof log.details === 'string' ? log.details : 
+                     log.details?.scriptName ? `Script: ${log.details.scriptName}` :
+                     log.details?.command ? `Comando: ${log.details.command}` :
+                     log.details?.fileName ? `Arquivo: ${log.details.fileName}` :
+                     'Operação do sistema'}
+                  </p>
+
+                  {/* Preview de stdout/stderr se existir */}
+                  {hasExecutionOutput(log.details) && (
+                    <div className="mt-2 space-y-1">
+                      {log.details.stdout && (
+                        <div className="text-xs">
+                          <span className="text-green-400">✓ STDOUT:</span>
+                          <span className="ml-2 opacity-75">
+                            {log.details.stdout.slice(0, 100)}{log.details.stdout.length > 100 ? '...' : ''}
                           </span>
                         </div>
-                        {isComplexLog && (
-                          <Button
-                            onClick={() => setExpandedLog(isExpanded ? null : logId)}
-                            variant="outline"
-                            size="sm"
-                            className="border-slate-500/50 text-slate-400 hover:bg-slate-600/20"
-                          >
-                            {isExpanded ? <X className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </Button>
-                        )}
-                      </div>
-                      
-                      <div className="text-sm text-slate-300">
-                        {isComplexLog ? (
-                          isExpanded ? (
-                            <div className="space-y-2">{formattedMessage}</div>
-                          ) : (
-                            <div className="space-y-1">
-                              <div>{log.action}</div>
-                              <div className="text-xs text-slate-500">
-                                Clique no botão para ver detalhes completos
-                              </div>
-                            </div>
-                          )
-                        ) : (
-                          <pre className="whitespace-pre-wrap overflow-x-auto">
-                            {typeof formattedMessage === 'string' ? 
-                              (formattedMessage.length > 200 && !isExpanded ? 
-                                truncateMessage(formattedMessage) : formattedMessage
-                              ) : formattedMessage
-                            }
-                          </pre>
-                        )}
-                      </div>
+                      )}
+                      {log.details.stderr && (
+                        <div className="text-xs">
+                          <span className="text-red-400">✗ STDERR:</span>
+                          <span className="ml-2 opacity-75">
+                            {log.details.stderr.slice(0, 100)}{log.details.stderr.length > 100 ? '...' : ''}
+                          </span>
+                        </div>
+                      )}
                     </div>
-                  );
-                })
-              )}
+                  )}
+                </div>
+                
+                <Button
+                  onClick={() => showLogDetails(log)}
+                  variant="outline"
+                  size="sm"
+                  className="border-current/30 hover:bg-current/10 flex-shrink-0"
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
-          </TabsContent>
-        </Tabs>
-      </CardContent>
-    </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog para detalhes completos do log */}
+      <Dialog open={showDetails} onOpenChange={setShowDetails}>
+        <DialogContent className="max-w-6xl max-h-[90vh] bg-slate-800 border-cyan-500/30">
+          <DialogHeader>
+            <DialogTitle className="text-cyan-400 flex items-center">
+              <FileText className="w-5 h-5 mr-2" />
+              Detalhes do Log: {selectedLog?.action}
+            </DialogTitle>
+          </DialogHeader>
+          
+          {selectedLog && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-slate-400">Timestamp:</span>
+                  <p className="text-white">{new Date(selectedLog.timestamp).toLocaleString('pt-BR')}</p>
+                </div>
+                <div>
+                  <span className="text-slate-400">Nível:</span>
+                  <p className={`text-white flex items-center space-x-2`}>
+                    {getLevelIcon(selectedLog.level)}
+                    <span>{selectedLog.level}</span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Saídas de execução destacadas */}
+              {renderExecutionOutput(selectedLog.details)}
+
+              {/* Detalhes completos */}
+              <div className="bg-slate-900/50 p-4 rounded-lg">
+                <h4 className="text-slate-300 mb-2">Detalhes Completos:</h4>
+                <ScrollArea className="h-60 w-full">
+                  <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono">
+                    {formatLogDetails(selectedLog.details)}
+                  </pre>
+                </ScrollArea>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 

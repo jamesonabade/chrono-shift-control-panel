@@ -1,502 +1,376 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { User, UserPlus, Key, Trash2, Shield } from 'lucide-react';
+import { Users, UserPlus, User, Edit, Trash2, Calendar, Database, FileCode, Terminal, FileText, Shield } from 'lucide-react';
 
 interface User {
   id: string;
   username: string;
+  password?: string;
+  permissions: {
+    date: boolean;
+    database: boolean;
+    scripts: boolean;
+    commands: boolean;
+    users: boolean;
+    logs: boolean;
+  };
   createdAt: string;
-}
-
-interface UserPermissions {
-  date: boolean;
-  database: boolean;
-  scripts: boolean;
-  users: boolean;
-  logs: boolean;
 }
 
 const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
-  const [newUsername, setNewUsername] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPasswordChange, setNewPasswordChange] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [selectedUser, setSelectedUser] = useState('');
-  const [userPermissions, setUserPermissions] = useState<UserPermissions>({
-    date: true,
+  const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [newUser, setNewUser] = useState({ username: '', password: '', permissions: {
+    date: false,
     database: false,
-    scripts: true,
+    scripts: false,
+    commands: false,
     users: false,
     logs: false
-  });
+  } });
   const { toast } = useToast();
 
-  // Carrega usuários e permissões salvos
   useEffect(() => {
-    // Carregar usuários
-    const savedUsers = localStorage.getItem('systemUsers');
-    if (savedUsers) {
-      setUsers(JSON.parse(savedUsers));
-    } else {
-      // Criar usuários padrão se não existirem
-      const defaultUsers = [
-        {
-          id: '1',
-          username: 'administrador',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: '2',
-          username: 'usuario',
-          createdAt: new Date().toISOString()
-        }
-      ];
-      setUsers(defaultUsers);
-      localStorage.setItem('systemUsers', JSON.stringify(defaultUsers));
-    }
+    loadUsers();
   }, []);
 
-  const logAction = (action: string, details: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      user: localStorage.getItem('currentUser') || 'admin'
-    };
-    
-    console.log('USER_MANAGEMENT_LOG:', JSON.stringify(logEntry));
-    
-    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-    logs.push(logEntry);
-    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+  const defaultPermissions = {
+    date: false,
+    database: false,
+    scripts: false,
+    commands: false,
+    users: false,
+    logs: false
   };
 
-  const createUser = () => {
-    if (!newUsername || !newPassword) {
+  const loadUsers = () => {
+    const saved = localStorage.getItem('users');
+    if (saved) {
+      setUsers(JSON.parse(saved));
+    } else {
+      // Usuário administrador padrão
+      const adminUser: User = {
+        id: '1',
+        username: 'administrador',
+        password: 'admin',
+        permissions: {
+          date: true,
+          database: true,
+          scripts: true,
+          commands: true,
+          users: true,
+          logs: true
+        },
+        createdAt: new Date().toISOString()
+      };
+      setUsers([adminUser]);
+      localStorage.setItem('users', JSON.stringify([adminUser]));
+    }
+  };
+
+  const addUser = () => {
+    if (!newUser.username || !newUser.password) {
       toast({
         title: "Erro",
-        description: "Username e senha são obrigatórios",
+        description: "Nome de usuário e senha são obrigatórios",
         variant: "destructive"
       });
       return;
     }
 
-    if (users.find(u => u.username === newUsername)) {
+    if (users.some(u => u.username === newUser.username)) {
       toast({
-        title: "Erro",
-        description: "Usuário já existe",
+        title: "Erro", 
+        description: "Nome de usuário já existe",
         variant: "destructive"
       });
       return;
     }
 
-    const newUser: User = {
+    const user: User = {
       id: Date.now().toString(),
-      username: newUsername,
+      username: newUser.username,
+      password: newUser.password,
+      permissions: { ...defaultPermissions, ...newUser.permissions },
       createdAt: new Date().toISOString()
     };
 
-    const updatedUsers = [...users, newUser];
-    setUsers(updatedUsers);
-    localStorage.setItem('systemUsers', JSON.stringify(updatedUsers));
-    
-    // Salva credenciais
-    const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
-    credentials[newUsername] = newPassword;
-    localStorage.setItem('userCredentials', JSON.stringify(credentials));
-
-    // Salva permissões padrão
-    const permissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
-    permissions[newUsername] = {
-      date: true,
-      database: false,
-      scripts: true,
-      users: false,
-      logs: false
-    };
-    localStorage.setItem('userPermissions', JSON.stringify(permissions));
-
-    logAction('CREATE_USER', { username: newUsername, userId: newUser.id });
+    const updatedUsers = [...users, user];
+    saveUsers(updatedUsers);
+    setNewUser({ username: '', password: '', permissions: defaultPermissions });
+    setShowAddDialog(false);
 
     toast({
       title: "Usuário criado!",
-      description: `Usuário ${newUsername} foi criado com sucesso`
+      description: `${user.username} foi adicionado com sucesso`,
     });
-
-    setNewUsername('');
-    setNewPassword('');
   };
 
-  const deleteUser = (user: User) => {
-    if (user.username === 'administrador') {
-      toast({
-        title: "Erro",
-        description: "Não é possível excluir o usuário administrador",
-        variant: "destructive"
-      });
-      return;
-    }
+  const editUser = () => {
+    if (!editingUser) return;
 
-    const updatedUsers = users.filter(u => u.id !== user.id);
+    const updatedUsers = users.map(u => 
+      u.id === editingUser.id ? editingUser : u
+    );
+    saveUsers(updatedUsers);
+    setShowEditDialog(false);
+    setEditingUser(null);
+
+    toast({
+      title: "Usuário atualizado!",
+      description: `${editingUser.username} foi atualizado`,
+    });
+  };
+
+  const deleteUser = (id: string) => {
+    const updatedUsers = users.filter(user => user.id !== id);
+    saveUsers(updatedUsers);
+
+    toast({
+      title: "Usuário removido!",
+      description: "Usuário removido com sucesso",
+    });
+  };
+
+  const saveUsers = (updatedUsers: User[]) => {
     setUsers(updatedUsers);
-    localStorage.setItem('systemUsers', JSON.stringify(updatedUsers));
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
 
-    // Remove credenciais
-    const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
-    delete credentials[user.username];
-    localStorage.setItem('userCredentials', JSON.stringify(credentials));
-
-    // Remove permissões
-    const permissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
-    delete permissions[user.username];
-    localStorage.setItem('userPermissions', JSON.stringify(permissions));
-
-    logAction('DELETE_USER', { username: user.username, userId: user.id });
-
-    toast({
-      title: "Usuário excluído!",
-      description: `Usuário ${user.username} foi excluído`
+    // Atualizar permissões no localStorage
+    const userPermissions: { [username: string]: any } = {};
+    updatedUsers.forEach(user => {
+      userPermissions[user.username] = user.permissions;
     });
+    localStorage.setItem('userPermissions', JSON.stringify(userPermissions));
   };
 
-  const changePassword = () => {
-    if (!currentPassword || !newPasswordChange || !confirmPassword) {
-      toast({
-        title: "Erro",
-        description: "Todos os campos são obrigatórios",
-        variant: "destructive"
-      });
-      return;
+  const getPermissionIcon = (permission: string) => {
+    switch (permission) {
+      case 'date': return <Calendar className="w-4 h-4" />;
+      case 'database': return <Database className="w-4 h-4" />;
+      case 'scripts': return <FileCode className="w-4 h-4" />;
+      case 'commands': return <Terminal className="w-4 h-4" />;
+      case 'users': return <Users className="w-4 h-4" />;
+      case 'logs': return <FileText className="w-4 h-4" />;
+      default: return <Shield className="w-4 h-4" />;
     }
-
-    if (newPasswordChange !== confirmPassword) {
-      toast({
-        title: "Erro",
-        description: "Nova senha e confirmação não coincidem",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const currentUser = localStorage.getItem('currentUser') || 'administrador';
-    const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{"administrador": "admin123"}');
-    
-    if (credentials[currentUser] !== currentPassword) {
-      toast({
-        title: "Erro",
-        description: "Senha atual incorreta",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    credentials[currentUser] = newPasswordChange;
-    localStorage.setItem('userCredentials', JSON.stringify(credentials));
-
-    logAction('CHANGE_PASSWORD', { username: currentUser });
-
-    toast({
-      title: "Senha alterada!",
-      description: "Sua senha foi alterada com sucesso"
-    });
-
-    setCurrentPassword('');
-    setNewPasswordChange('');
-    setConfirmPassword('');
   };
 
-  const loadUserPermissions = (username: string) => {
-    const permissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
-    const userPerms = permissions[username] || {
-      date: true,
-      database: false,
-      scripts: true,
-      users: false,
-      logs: false
-    };
-    setUserPermissions(userPerms);
+  const getPermissionLabel = (permission: string) => {
+    switch (permission) {
+      case 'date': return 'Alteração de Data';
+      case 'database': return 'Restauração de Banco';
+      case 'scripts': return 'Gerenciar Scripts';
+      case 'commands': return 'Comandos Personalizados';
+      case 'users': return 'Gerenciar Usuários';
+      case 'logs': return 'Visualizar Logs';
+      default: return permission;
+    }
   };
 
-  const updateUserPermissions = () => {
-    if (!selectedUser) {
-      toast({
-        title: "Erro",
-        description: "Selecione um usuário",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (selectedUser === 'administrador') {
-      toast({
-        title: "Erro",
-        description: "Não é possível alterar permissões do administrador",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const permissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
-    permissions[selectedUser] = userPermissions;
-    localStorage.setItem('userPermissions', JSON.stringify(permissions));
-
-    logAction('UPDATE_PERMISSIONS', { username: selectedUser, permissions: userPermissions });
-
-    toast({
-      title: "Permissões atualizadas!",
-      description: `Permissões do usuário ${selectedUser} foram atualizadas`
-    });
-  };
+  const renderPermissionCheckbox = (permissions: any, setPermissions: any, permission: string) => (
+    <div key={permission} className="flex items-center space-x-3 p-2 hover:bg-slate-600/30 rounded">
+      <input
+        type="checkbox"
+        id={permission}
+        checked={permissions[permission] || false}
+        onChange={(e) => setPermissions({ ...permissions, [permission]: e.target.checked })}
+        className="rounded border-slate-600"
+      />
+      <label htmlFor={permission} className="flex items-center space-x-2 text-sm text-slate-300 cursor-pointer">
+        {getPermissionIcon(permission)}
+        <span>{getPermissionLabel(permission)}</span>
+      </label>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="change-password" className="w-full">
-        <TabsList className="grid w-full grid-cols-3 bg-slate-700/50">
-          <TabsTrigger value="change-password" className="data-[state=active]:bg-cyan-500/20">
-            Alterar Senha
-          </TabsTrigger>
-          <TabsTrigger value="manage-users" className="data-[state=active]:bg-cyan-500/20">
-            Gerenciar Usuários
-          </TabsTrigger>
-          <TabsTrigger value="permissions" className="data-[state=active]:bg-cyan-500/20">
-            Permissões
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="change-password">
-          <Card className="bg-slate-700/30 border-cyan-500/30">
-            <CardHeader>
-              <CardTitle className="text-cyan-400 flex items-center">
-                <Key className="w-5 h-5 mr-2" />
-                Alterar Senha
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Input
-                type="password"
-                placeholder="Senha atual"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
-              <Input
-                type="password"
-                placeholder="Nova senha"
-                value={newPasswordChange}
-                onChange={(e) => setNewPasswordChange(e.target.value)}
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
-              <Input
-                type="password"
-                placeholder="Confirmar nova senha"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
-              <Button 
-                onClick={changePassword}
-                className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600"
-              >
-                <Key className="w-4 h-4 mr-2" />
-                Alterar Senha
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="manage-users">
-          <div className="space-y-6">
-            <Card className="bg-slate-700/30 border-cyan-500/30">
-              <CardHeader>
-                <CardTitle className="text-cyan-400 flex items-center">
-                  <UserPlus className="w-5 h-5 mr-2" />
-                  Criar Novo Usuário
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Users className="w-5 h-5 text-emerald-400" />
+          <h3 className="text-lg font-semibold text-emerald-400">Gerenciamento de Usuários</h3>
+        </div>
+        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+          <DialogTrigger asChild>
+            <Button className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <UserPlus className="w-4 h-4 mr-2" />
+              Novo Usuário
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="bg-slate-800 border-emerald-500/30 max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="text-emerald-400">Adicionar Novo Usuário</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <Input
                   placeholder="Nome de usuário"
-                  value={newUsername}
-                  onChange={(e) => setNewUsername(e.target.value)}
+                  value={newUser.username}
+                  onChange={(e) => setNewUser({ ...newUser, username: e.target.value })}
                   className="bg-slate-700/50 border-slate-600 text-white"
                 />
                 <Input
                   type="password"
                   placeholder="Senha"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  value={newUser.password}
+                  onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                   className="bg-slate-700/50 border-slate-600 text-white"
                 />
-                <Button 
-                  onClick={createUser}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600"
-                >
-                  <UserPlus className="w-4 h-4 mr-2" />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-slate-300">Permissões</Label>
+                <div className="grid grid-cols-2 gap-2 bg-slate-700/30 p-4 rounded-lg border border-slate-600/30">
+                  {Object.keys(defaultPermissions).map(permission => 
+                    renderPermissionCheckbox(newUser.permissions, 
+                      (perms: any) => setNewUser({ ...newUser, permissions: perms }), 
+                      permission)
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button onClick={addUser} className="bg-emerald-600 hover:bg-emerald-700">
                   Criar Usuário
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-slate-700/30 border-cyan-500/30">
-              <CardHeader>
-                <CardTitle className="text-cyan-400 flex items-center">
-                  <User className="w-5 h-5 mr-2" />
-                  Usuários do Sistema
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {users.map((user) => (
-                    <div key={user.id} className="flex items-center justify-between p-3 bg-slate-600/30 rounded-lg border border-slate-500/30">
-                      <div>
-                        <p className="text-white font-medium">
-                          {user.username}
-                          {user.username === 'administrador' && (
-                            <span className="ml-2 text-xs bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded">Admin</span>
-                          )}
-                        </p>
-                        <p className="text-slate-400 text-sm">
-                          Criado em: {new Date(user.createdAt).toLocaleDateString('pt-BR')}
-                        </p>
-                      </div>
-                      {user.username !== 'administrador' && (
-                        <Button
-                          onClick={() => deleteUser(user)}
-                          variant="outline"
-                          size="sm"
-                          className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </TabsContent>
-
-        <TabsContent value="permissions">
-          <Card className="bg-slate-700/30 border-cyan-500/30">
-            <CardHeader>
-              <CardTitle className="text-cyan-400 flex items-center">
-                <Shield className="w-5 h-5 mr-2" />
-                Gerenciar Permissões de Usuário
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-2">
-                  Selecionar Usuário
-                </label>
-                <select
-                  value={selectedUser}
-                  onChange={(e) => {
-                    setSelectedUser(e.target.value);
-                    if (e.target.value) loadUserPermissions(e.target.value);
-                  }}
-                  className="w-full p-2 bg-slate-700/50 border border-slate-600 rounded-md text-white"
+                <Button 
+                  onClick={() => setShowAddDialog(false)} 
+                  variant="outline"
+                  className="border-slate-600"
                 >
-                  <option value="">Selecione um usuário</option>
-                  {users.filter(u => u.username !== 'administrador').map((user) => (
-                    <option key={user.id} value={user.username}>
-                      {user.username}
-                    </option>
-                  ))}
-                </select>
+                  Cancelar
+                </Button>
               </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      </div>
 
-              {selectedUser && (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 gap-4">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="date"
-                        checked={userPermissions.date}
-                        onCheckedChange={(checked) => 
-                          setUserPermissions(prev => ({ ...prev, date: !!checked }))
-                        }
-                      />
-                      <label htmlFor="date" className="text-sm text-white">
-                        Acesso à aba Data
-                      </label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="database"
-                        checked={userPermissions.database}
-                        onCheckedChange={(checked) => 
-                          setUserPermissions(prev => ({ ...prev, database: !!checked }))
-                        }
-                      />
-                      <label htmlFor="database" className="text-sm text-white">
-                        Acesso à aba Banco de Dados
-                      </label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="scripts"
-                        checked={userPermissions.scripts}
-                        onCheckedChange={(checked) => 
-                          setUserPermissions(prev => ({ ...prev, scripts: !!checked }))
-                        }
-                      />
-                      <label htmlFor="scripts" className="text-sm text-white">
-                        Acesso à aba Scripts
-                      </label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="users"
-                        checked={userPermissions.users}
-                        onCheckedChange={(checked) => 
-                          setUserPermissions(prev => ({ ...prev, users: !!checked }))
-                        }
-                      />
-                      <label htmlFor="users" className="text-sm text-white">
-                        Acesso à aba Usuários
-                      </label>
-                    </div>
-
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="logs"
-                        checked={userPermissions.logs}
-                        onCheckedChange={(checked) => 
-                          setUserPermissions(prev => ({ ...prev, logs: !!checked }))
-                        }
-                      />
-                      <label htmlFor="logs" className="text-sm text-white">
-                        Acesso à aba Logs
-                      </label>
-                    </div>
+      {users.length === 0 ? (
+        <div className="p-6 bg-slate-700/30 rounded-lg border border-slate-600/30 text-center">
+          <Users className="w-12 h-12 text-slate-500 mx-auto mb-2" />
+          <p className="text-slate-400">Nenhum usuário cadastrado</p>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {users.map((user) => (
+            <div key={user.id} className="p-4 bg-slate-700/30 rounded-lg border border-slate-600/30">
+              <div className="flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="flex items-center space-x-2 mb-2">
+                    <User className="w-5 h-5 text-emerald-400" />
+                    <h4 className="text-white font-medium">{user.username}</h4>
+                    {user.username === 'administrador' && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                        Admin
+                      </span>
+                    )}
                   </div>
-
-                  <Button 
-                    onClick={updateUserPermissions}
-                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600"
+                  
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {Object.entries(user.permissions).map(([perm, hasAccess]) => 
+                      hasAccess && (
+                        <span key={perm} className="flex items-center space-x-1 px-2 py-1 text-xs rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                          {getPermissionIcon(perm)}
+                          <span>{getPermissionLabel(perm)}</span>
+                        </span>
+                      )
+                    )}
+                  </div>
+                  
+                  <p className="text-xs text-slate-500 mt-2">
+                    Criado em: {new Date(user.createdAt).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+                
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => {
+                      setEditingUser(user);
+                      setShowEditDialog(true);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                    disabled={user.username === 'administrador'}
                   >
-                    <Shield className="w-4 h-4 mr-2" />
-                    Atualizar Permissões
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    onClick={() => deleteUser(user.id)}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                    disabled={user.username === 'administrador'}
+                  >
+                    <Trash2 className="w-4 h-4" />
                   </Button>
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Dialog de edição */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="bg-slate-800 border-blue-500/30 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-blue-400">Editar Usuário</DialogTitle>
+          </DialogHeader>
+          {editingUser && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Input
+                  placeholder="Nome de usuário"
+                  value={editingUser.username}
+                  onChange={(e) => setEditingUser({ ...editingUser, username: e.target.value })}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                  disabled={editingUser.username === 'administrador'}
+                />
+                <Input
+                  type="password"
+                  placeholder="Nova senha (deixe vazio para manter)"
+                  value={editingUser.password}
+                  onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-slate-300">Permissões</Label>
+                <div className="grid grid-cols-2 gap-2 bg-slate-700/30 p-4 rounded-lg border border-slate-600/30">
+                  {Object.keys(defaultPermissions).map(permission => 
+                    renderPermissionCheckbox(editingUser.permissions, 
+                      (perms: any) => setEditingUser({ ...editingUser, permissions: perms }), 
+                      permission)
+                  )}
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button onClick={editUser} className="bg-blue-600 hover:bg-blue-700">
+                  Salvar Alterações
+                </Button>
+                <Button 
+                  onClick={() => setShowEditDialog(false)} 
+                  variant="outline"
+                  className="border-slate-600"
+                >
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

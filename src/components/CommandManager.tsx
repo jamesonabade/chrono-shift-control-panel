@@ -3,15 +3,18 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Play, Plus, Edit, Trash2, Eye, Settings } from 'lucide-react';
+import { Play, Plus, Edit, Trash2, Settings, Calendar, Database, Terminal } from 'lucide-react';
 
 interface Command {
   id: string;
   name: string;
   command: string;
   description?: string;
+  category: 'date' | 'database' | 'custom';
+  linkedToButton?: boolean;
   createdAt: string;
 }
 
@@ -20,8 +23,15 @@ const CommandManager = () => {
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingCommand, setEditingCommand] = useState<Command | null>(null);
-  const [newCommand, setNewCommand] = useState({ name: '', command: '', description: '' });
+  const [newCommand, setNewCommand] = useState({ 
+    name: '', 
+    command: '', 
+    description: '', 
+    category: 'custom' as 'date' | 'database' | 'custom',
+    linkedToButton: false 
+  });
   const [isExecuting, setIsExecuting] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'date' | 'database' | 'custom'>('all');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -40,6 +50,8 @@ const CommandManager = () => {
           name: 'Aplicar Data',
           command: 'bash /app/scripts/change_date.sh',
           description: 'Executa script de alteração de data',
+          category: 'date',
+          linkedToButton: true,
           createdAt: new Date().toISOString()
         },
         {
@@ -47,6 +59,8 @@ const CommandManager = () => {
           name: 'Restaurar Banco',
           command: 'bash /app/scripts/restore_db.sh',
           description: 'Executa script de restauração do banco',
+          category: 'database',
+          linkedToButton: true,
           createdAt: new Date().toISOString()
         }
       ];
@@ -75,12 +89,14 @@ const CommandManager = () => {
       name: newCommand.name,
       command: newCommand.command,
       description: newCommand.description,
+      category: newCommand.category,
+      linkedToButton: newCommand.linkedToButton,
       createdAt: new Date().toISOString()
     };
 
     const updatedCommands = [...commands, command];
     saveCommands(updatedCommands);
-    setNewCommand({ name: '', command: '', description: '' });
+    setNewCommand({ name: '', command: '', description: '', category: 'custom', linkedToButton: false });
     setShowAddDialog(false);
 
     toast({
@@ -112,6 +128,28 @@ const CommandManager = () => {
     toast({
       title: "Comando removido!",
       description: "Comando foi removido com sucesso",
+    });
+  };
+
+  const toggleButtonLink = (command: Command) => {
+    const updatedCommands = commands.map(cmd => {
+      if (cmd.id === command.id) {
+        return { ...cmd, linkedToButton: !cmd.linkedToButton };
+      }
+      // Se está vinculando este comando, desvincular outros da mesma categoria
+      if (cmd.category === command.category && !command.linkedToButton) {
+        return { ...cmd, linkedToButton: false };
+      }
+      return cmd;
+    });
+    
+    saveCommands(updatedCommands);
+    
+    toast({
+      title: command.linkedToButton ? "Comando desvinculado" : "Comando vinculado",
+      description: command.linkedToButton ? 
+        `${command.name} não será mais usado pelo botão` : 
+        `${command.name} será usado pelo botão de ${getCategoryLabel(command.category)}`,
     });
   };
 
@@ -157,69 +195,145 @@ const CommandManager = () => {
     }
   };
 
+  const getCategoryIcon = (category: string) => {
+    switch (category) {
+      case 'date': return <Calendar className="w-4 h-4 text-blue-400" />;
+      case 'database': return <Database className="w-4 h-4 text-green-400" />;
+      default: return <Terminal className="w-4 h-4 text-purple-400" />;
+    }
+  };
+
+  const getCategoryLabel = (category: string) => {
+    switch (category) {
+      case 'date': return 'Data/Hora';
+      case 'database': return 'Banco de Dados';
+      default: return 'Personalizado';
+    }
+  };
+
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case 'date': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
+      case 'database': return 'bg-green-500/20 text-green-400 border-green-500/30';
+      default: return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
+    }
+  };
+
+  const filteredCommands = commands.filter(cmd => 
+    selectedCategory === 'all' || cmd.category === selectedCategory
+  );
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-lg font-semibold text-purple-400">Comandos Personalizados</h3>
-        <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-          <DialogTrigger asChild>
-            <Button className="bg-green-600 hover:bg-green-700 text-white">
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Comando
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-slate-800 border-green-500/30">
-            <DialogHeader>
-              <DialogTitle className="text-green-400">Adicionar Novo Comando</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <Input
-                placeholder="Nome do comando"
-                value={newCommand.name}
-                onChange={(e) => setNewCommand({ ...newCommand, name: e.target.value })}
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
-              <Input
-                placeholder="Comando a ser executado"
-                value={newCommand.command}
-                onChange={(e) => setNewCommand({ ...newCommand, command: e.target.value })}
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
-              <Textarea
-                placeholder="Descrição (opcional)"
-                value={newCommand.description}
-                onChange={(e) => setNewCommand({ ...newCommand, description: e.target.value })}
-                className="bg-slate-700/50 border-slate-600 text-white"
-              />
-              <div className="flex gap-2">
-                <Button onClick={addCommand} className="bg-green-600 hover:bg-green-700">
-                  Adicionar
-                </Button>
-                <Button 
-                  onClick={() => setShowAddDialog(false)} 
-                  variant="outline"
-                  className="border-slate-600"
+        <div className="flex gap-2">
+          <Select value={selectedCategory} onValueChange={(value: 'all' | 'date' | 'database' | 'custom') => setSelectedCategory(value)}>
+            <SelectTrigger className="w-40 bg-slate-700/50 border-slate-600 text-white">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-slate-800 border-slate-600">
+              <SelectItem value="all" className="text-white">Todos</SelectItem>
+              <SelectItem value="date" className="text-white">Data/Hora</SelectItem>
+              <SelectItem value="database" className="text-white">Banco</SelectItem>
+              <SelectItem value="custom" className="text-white">Personalizados</SelectItem>
+            </SelectContent>
+          </Select>
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button className="bg-green-600 hover:bg-green-700 text-white">
+                <Plus className="w-4 h-4 mr-2" />
+                Novo Comando
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-slate-800 border-green-500/30">
+              <DialogHeader>
+                <DialogTitle className="text-green-400">Adicionar Novo Comando</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
+                <Input
+                  placeholder="Nome do comando"
+                  value={newCommand.name}
+                  onChange={(e) => setNewCommand({ ...newCommand, name: e.target.value })}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+                <Input
+                  placeholder="Comando a ser executado"
+                  value={newCommand.command}
+                  onChange={(e) => setNewCommand({ ...newCommand, command: e.target.value })}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+                <Textarea
+                  placeholder="Descrição (opcional)"
+                  value={newCommand.description}
+                  onChange={(e) => setNewCommand({ ...newCommand, description: e.target.value })}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+                <Select 
+                  value={newCommand.category} 
+                  onValueChange={(value: 'date' | 'database' | 'custom') => setNewCommand({ ...newCommand, category: value })}
                 >
-                  Cancelar
-                </Button>
+                  <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-800 border-slate-600">
+                    <SelectItem value="custom" className="text-white">Personalizado</SelectItem>
+                    <SelectItem value="date" className="text-white">Data/Hora</SelectItem>
+                    <SelectItem value="database" className="text-white">Banco de Dados</SelectItem>
+                  </SelectContent>
+                </Select>
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="linkedToButton"
+                    checked={newCommand.linkedToButton}
+                    onChange={(e) => setNewCommand({ ...newCommand, linkedToButton: e.target.checked })}
+                    className="rounded border-slate-600"
+                  />
+                  <label htmlFor="linkedToButton" className="text-sm text-slate-300">
+                    Vincular ao botão da categoria
+                  </label>
+                </div>
+                <div className="flex gap-2">
+                  <Button onClick={addCommand} className="bg-green-600 hover:bg-green-700">
+                    Adicionar
+                  </Button>
+                  <Button 
+                    onClick={() => setShowAddDialog(false)} 
+                    variant="outline"
+                    className="border-slate-600"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
               </div>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
-      {commands.length === 0 ? (
+      {filteredCommands.length === 0 ? (
         <div className="p-6 bg-slate-700/30 rounded-lg border border-slate-600/30 text-center">
           <Settings className="w-12 h-12 text-slate-500 mx-auto mb-2" />
-          <p className="text-slate-400">Nenhum comando configurado</p>
+          <p className="text-slate-400">Nenhum comando na categoria selecionada</p>
         </div>
       ) : (
         <div className="space-y-3">
-          {commands.map((command) => (
+          {filteredCommands.map((command) => (
             <div key={command.id} className="p-4 bg-slate-700/30 rounded-lg border border-slate-600/30">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <h4 className="text-white font-medium">{command.name}</h4>
+                  <div className="flex items-center space-x-2 mb-2">
+                    <h4 className="text-white font-medium">{command.name}</h4>
+                    <span className={`px-2 py-1 text-xs rounded-full border ${getCategoryColor(command.category)}`}>
+                      {getCategoryLabel(command.category)}
+                    </span>
+                    {command.linkedToButton && (
+                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+                        Vinculado ao Botão
+                      </span>
+                    )}
+                  </div>
                   <p className="text-sm text-slate-400 mt-1">
                     {command.description || 'Sem descrição'}
                   </p>
@@ -241,13 +355,25 @@ const CommandManager = () => {
                     )}
                   </Button>
                   <Button
+                    onClick={() => toggleButtonLink(command)}
+                    variant="outline"
+                    size="sm"
+                    className={command.linkedToButton ? 
+                      "border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20" :
+                      "border-slate-500/50 text-slate-400 hover:bg-slate-500/20"
+                    }
+                    title={command.linkedToButton ? "Desvincular do botão" : "Vincular ao botão"}
+                  >
+                    <Settings className="w-4 h-4" />
+                  </Button>
+                  <Button
                     onClick={() => {
                       setEditingCommand(command);
                       setShowEditDialog(true);
                     }}
                     variant="outline"
                     size="sm"
-                    className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20"
+                    className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
                   >
                     <Edit className="w-4 h-4" />
                   </Button>
@@ -292,6 +418,31 @@ const CommandManager = () => {
                 onChange={(e) => setEditingCommand({ ...editingCommand, description: e.target.value })}
                 className="bg-slate-700/50 border-slate-600 text-white"
               />
+              <Select 
+                value={editingCommand.category} 
+                onValueChange={(value: 'date' | 'database' | 'custom') => setEditingCommand({ ...editingCommand, category: value })}
+              >
+                <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="bg-slate-800 border-slate-600">
+                  <SelectItem value="custom" className="text-white">Personalizado</SelectItem>
+                  <SelectItem value="date" className="text-white">Data/Hora</SelectItem>
+                  <SelectItem value="database" className="text-white">Banco de Dados</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="editLinkedToButton"
+                  checked={editingCommand.linkedToButton || false}
+                  onChange={(e) => setEditingCommand({ ...editingCommand, linkedToButton: e.target.checked })}
+                  className="rounded border-slate-600"
+                />
+                <label htmlFor="editLinkedToButton" className="text-sm text-slate-300">
+                  Vincular ao botão da categoria
+                </label>
+              </div>
               <div className="flex gap-2">
                 <Button onClick={editCommand} className="bg-yellow-600 hover:bg-yellow-700">
                   Salvar

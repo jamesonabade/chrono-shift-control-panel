@@ -1,178 +1,186 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { Database, Play, Settings } from 'lucide-react';
 
 const DatabaseRestore = () => {
-  const [selectedEnvironment, setSelectedEnvironment] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [databaseUrl, setDatabaseUrl] = useState('');
+  const [backupPath, setBackupPath] = useState('');
+  const [databaseCommand, setDatabaseCommand] = useState('');
+  const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
-  const environments = [
-    { value: 'DEV', label: 'Desenvolvimento (DEV)' },
-    { value: 'TESTES', label: 'Testes (TESTES)' }
-  ];
+  useEffect(() => {
+    loadDatabaseCommand();
+  }, []);
 
-  const logAction = (action: string, details: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      user: localStorage.getItem('currentUser') || 'admin'
-    };
-    
-    console.log('DATABASE_RESTORE_LOG:', JSON.stringify(logEntry));
-    
-    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-    logs.push(logEntry);
-    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+  const loadDatabaseCommand = () => {
+    const saved = localStorage.getItem('databaseCommand');
+    if (saved) {
+      setDatabaseCommand(saved);
+    } else {
+      const defaultCommand = 'bash /app/scripts/restore_db.sh';
+      setDatabaseCommand(defaultCommand);
+      localStorage.setItem('databaseCommand', defaultCommand);
+    }
   };
 
-  const handleRestore = async () => {
-    if (!selectedEnvironment) {
+  const saveCommand = (command: string) => {
+    setDatabaseCommand(command);
+    localStorage.setItem('databaseCommand', command);
+    toast({
+      title: "Comando salvo!",
+      description: "Comando de banco foi atualizado",
+    });
+  };
+
+  const executeCommand = async () => {
+    if (!databaseCommand.trim()) {
       toast({
         title: "Erro",
-        description: "Por favor, selecione um ambiente",
+        description: "Comando não configurado",
         variant: "destructive"
       });
       return;
     }
 
-    setIsLoading(true);
+    if (!databaseUrl) {
+      toast({
+        title: "Dados incompletos",
+        description: "Por favor, informe a URL do banco de dados",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsExecuting(true);
 
     try {
-      // Verificar se existe script de banco
-      const checkResponse = await fetch('http://localhost:3001/api/check-script/database');
-      const checkResult = await checkResponse.json();
-      
-      if (!checkResult.exists) {
-        toast({
-          title: "Script não encontrado",
-          description: "O script de restauração de banco não foi carregado. Por favor, faça o upload do script na aba Scripts.",
-          variant: "destructive"
-        });
-        setIsLoading(false);
-        return;
-      }
-
-      const envVar = selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES';
-
-      // Definir variáveis de ambiente com mais opções
-      const envVars = {
-        [envVar]: 'true',
-        ENVIRONMENT: selectedEnvironment,
-        DATABASE_ENV: selectedEnvironment,
-        RESTORE_TARGET: selectedEnvironment,
-        DB_ENVIRONMENT: selectedEnvironment,
-        TARGET_ENV: selectedEnvironment,
-        ENV: selectedEnvironment,
-        DB_ENV: selectedEnvironment
+      const environment = {
+        DATABASE_URL: databaseUrl,
+        BACKUP_PATH: backupPath || '/app/backups/backup.sql',
+        DB_HOST: databaseUrl.includes('@') ? databaseUrl.split('@')[1].split(':')[0] : '',
+        DB_NAME: databaseUrl.includes('/') ? databaseUrl.split('/').pop() : ''
       };
 
-      console.log('Variables being passed to script:', envVars);
-
-      // Executar script de restauração com as variáveis
-      const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
+      const response = await fetch('http://localhost:3001/api/execute-command', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          scriptName: checkResult.script,
-          environment: envVars,
-          action: 'RESTAURAR_BANCO'
+          command: databaseCommand,
+          name: 'Restaurar Banco',
+          description: `Restaurar banco de dados: ${databaseUrl}`,
+          environment
         })
       });
 
-      const executeResult = await executeResponse.json();
+      const result = await response.json();
       
-      if (executeResult.success) {
-        logAction('RESTORE_DATABASE_SUCCESS', {
-          environment: selectedEnvironment,
-          script: checkResult.script,
-          variables: envVars,
-          output: executeResult.output
-        });
-
+      if (result.success) {
         toast({
-          title: "Restauração concluída!",
-          description: `Banco ${selectedEnvironment} restaurado com sucesso`,
+          title: "Banco restaurado!",
+          description: "Restauração concluída com sucesso",
         });
       } else {
-        logAction('RESTORE_DATABASE_ERROR', {
-          environment: selectedEnvironment,
-          script: checkResult.script,
-          error: executeResult.error,
-          stderr: executeResult.stderr,
-          stdout: executeResult.stdout
-        });
-
         toast({
-          title: "Erro na restauração",
-          description: executeResult.error || `Falha ao restaurar banco ${selectedEnvironment}`,
+          title: "Erro na execução",
+          description: result.error || "Falha ao restaurar banco",
           variant: "destructive"
         });
       }
-
     } catch (error) {
-      console.error('Erro ao restaurar banco:', error);
-      logAction('RESTORE_DATABASE_FATAL_ERROR', {
-        environment: selectedEnvironment,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
-      });
-
+      console.error('Erro na execução:', error);
       toast({
         title: "Erro",
-        description: "Erro ao restaurar banco de dados",
+        description: `Erro ao executar comando: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setIsExecuting(false);
     }
   };
 
   return (
     <div className="space-y-6">
-      <div className="space-y-2">
-        <label className="text-sm font-medium text-slate-300">Ambiente</label>
-        <Select value={selectedEnvironment} onValueChange={setSelectedEnvironment}>
-          <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
-            <SelectValue placeholder="Selecione o ambiente" />
-          </SelectTrigger>
-          <SelectContent className="bg-slate-800 border-slate-600 z-[100] backdrop-blur-xl shadow-2xl">
-            {environments.map((env) => (
-              <SelectItem key={env.value} value={env.value} className="text-white hover:bg-slate-700 focus:bg-slate-700">
-                {env.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex items-center space-x-2">
+        <Database className="w-5 h-5 text-green-400" />
+        <h3 className="text-lg font-semibold text-green-400">Restauração de Banco de Dados</h3>
+      </div>
+      
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <Label htmlFor="database-url" className="text-slate-300">URL do Banco de Dados</Label>
+          <Input
+            id="database-url"
+            type="text"
+            value={databaseUrl}
+            onChange={(e) => setDatabaseUrl(e.target.value)}
+            placeholder="postgresql://user:pass@host:port/database"
+            className="bg-slate-700/50 border-slate-600 text-white"
+          />
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="backup-path" className="text-slate-300">Caminho do Backup (opcional)</Label>
+          <Input
+            id="backup-path"
+            type="text"
+            value={backupPath}
+            onChange={(e) => setBackupPath(e.target.value)}
+            placeholder="/app/backups/backup.sql"
+            className="bg-slate-700/50 border-slate-600 text-white"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label className="text-slate-300">Comando de Execução</Label>
+          <div className="flex gap-2">
+            <Input
+              value={databaseCommand}
+              onChange={(e) => setDatabaseCommand(e.target.value)}
+              placeholder="bash /app/scripts/restore_db.sh"
+              className="bg-slate-700/50 border-slate-600 text-white"
+            />
+            <Button
+              onClick={() => saveCommand(databaseCommand)}
+              variant="outline"
+              className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+            >
+              <Settings className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
       </div>
 
       <Button 
-        onClick={handleRestore}
-        className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white font-semibold py-3 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-orange-500/30"
-        disabled={!selectedEnvironment || isLoading}
+        onClick={executeCommand}
+        disabled={!databaseUrl || isExecuting}
+        className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white font-semibold py-3"
       >
-        {isLoading ? 'RESTAURANDO...' : 'RESTAURAR BANCO'}
+        {isExecuting ? (
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+        ) : (
+          <Database className="w-5 h-5 mr-2" />
+        )}
+        {isExecuting ? 'Restaurando...' : 'Restaurar Banco'}
       </Button>
 
-      {selectedEnvironment && (
-        <div className="p-4 bg-slate-700/30 rounded-lg border border-orange-500/30">
-          <p className="text-sm text-slate-300 mb-2">
-            Variáveis que serão definidas no script:
+      {databaseUrl && (
+        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-lg">
+          <p className="text-green-300 text-sm">
+            <strong>Banco:</strong> {databaseUrl}
           </p>
-          <div className="grid grid-cols-2 gap-2 text-xs text-orange-400">
-            <div>• {selectedEnvironment === 'DEV' ? 'DB_DEV' : 'DB_TESTES'} = true</div>
-            <div>• ENVIRONMENT = {selectedEnvironment}</div>
-            <div>• DATABASE_ENV = {selectedEnvironment}</div>
-            <div>• RESTORE_TARGET = {selectedEnvironment}</div>
-            <div>• DB_ENVIRONMENT = {selectedEnvironment}</div>
-            <div>• TARGET_ENV = {selectedEnvironment}</div>
-            <div>• ENV = {selectedEnvironment}</div>
-            <div>• DB_ENV = {selectedEnvironment}</div>
-          </div>
+          <p className="text-green-300 text-sm">
+            <strong>Backup:</strong> {backupPath || '/app/backups/backup.sql'}
+          </p>
+          <p className="text-green-300 text-sm">
+            <strong>Comando:</strong> {databaseCommand}
+          </p>
         </div>
       )}
     </div>
