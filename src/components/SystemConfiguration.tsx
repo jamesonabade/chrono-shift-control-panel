@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,747 +5,600 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, Save, Plus, Trash2, Palette, Download, Upload, X } from 'lucide-react';
+import { Settings, Palette, Database, Calendar, Download, Upload, Eye, EyeOff, Server, AlertTriangle } from 'lucide-react';
 
 const SystemConfiguration = () => {
-  const [systemVariables, setSystemVariables] = useState({
-    date: {} as Record<string, string>,
-    database: {} as Record<string, string>
-  });
-  const [newVarKey, setNewVarKey] = useState('');
-  const [newVarValue, setNewVarValue] = useState('');
-  const [activeTab, setActiveTab] = useState('variables');
-  const [variableTab, setVariableTab] = useState('date');
-  
-  // Estados para personalização
   const [backgroundImage, setBackgroundImage] = useState('');
-  const [logo, setLogo] = useState('');
-  const [favicon, setFavicon] = useState('');
-  const [title, setTitle] = useState('PAINEL DE CONTROLE');
-  const [subtitle, setSubtitle] = useState('Sistema de Gerenciamento Docker');
-  const [logoSize, setLogoSize] = useState([48]);
-  const [backgroundOpacity, setBackgroundOpacity] = useState([50]);
+  const [logoImage, setLogoImage] = useState('');
+  const [systemTitle, setSystemTitle] = useState('Painel de Controle');
+  const [logoSize, setLogoSize] = useState(48);
+  const [systemVariables, setSystemVariables] = useState<Record<string, string>>({});
+  const [dateVariables, setDateVariables] = useState<Record<string, string>>({});
+  const [databaseVariables, setDatabaseVariables] = useState<Record<string, string>>({});
+  const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+  const [serverUrl, setServerUrl] = useState('http://localhost:3001');
   
   const { toast } = useToast();
 
   useEffect(() => {
-    loadSystemVariables();
-    loadCustomizations();
+    loadConfigurations();
+    checkServerStatus();
   }, []);
 
-  const loadSystemVariables = () => {
-    const saved = localStorage.getItem('systemVariables');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        setSystemVariables(parsed);
-        console.log('Variáveis carregadas:', parsed);
-      } catch (error) {
-        console.error('Erro ao carregar variáveis:', error);
-        setSystemVariables({ date: {}, database: {} });
-      }
-    }
-  };
-
-  const loadCustomizations = async () => {
+  const checkServerStatus = async () => {
+    setServerStatus('checking');
     try {
-      const response = await fetch('http://localhost:3001/api/customizations');
+      const response = await fetch(`${serverUrl}/api/health`, { 
+        method: 'GET',
+        timeout: 5000 
+      });
       if (response.ok) {
-        const customizations = await response.json();
-        setBackgroundImage(customizations.background || '');
-        setLogo(customizations.logo || '');
-        setFavicon(customizations.favicon || '');
-        setTitle(customizations.title || 'PAINEL DE CONTROLE');
-        setSubtitle(customizations.subtitle || 'Sistema de Gerenciamento Docker');
-        setLogoSize([customizations.logoSize || 48]);
-        setBackgroundOpacity([customizations.backgroundOpacity ? customizations.backgroundOpacity * 100 : 50]);
+        setServerStatus('online');
       } else {
-        // Fallback para localStorage
-        const localCustomizations = {
-          background: localStorage.getItem('loginBackground') || '',
-          logo: localStorage.getItem('loginLogo') || '',
-          favicon: localStorage.getItem('loginFavicon') || '',
-          title: localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE',
-          subtitle: localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker',
-          logoSize: parseInt(localStorage.getItem('logoSize') || '48'),
-          backgroundOpacity: parseFloat(localStorage.getItem('backgroundOpacity') || '0.5')
-        };
-        
-        setBackgroundImage(localCustomizations.background);
-        setLogo(localCustomizations.logo);
-        setFavicon(localCustomizations.favicon);
-        setTitle(localCustomizations.title);
-        setSubtitle(localCustomizations.subtitle);
-        setLogoSize([localCustomizations.logoSize]);
-        setBackgroundOpacity([localCustomizations.backgroundOpacity * 100]);
+        setServerStatus('offline');
       }
     } catch (error) {
-      console.error('Erro ao carregar personalizações:', error);
+      setServerStatus('offline');
+      console.error('Erro ao verificar status do servidor:', error);
     }
   };
 
-  const saveSystemVariables = async () => {
+  const loadConfigurations = async () => {
     try {
-      localStorage.setItem('systemVariables', JSON.stringify(systemVariables));
-      console.log('Variáveis salvas:', systemVariables);
+      // Tentar carregar do servidor primeiro
+      const response = await fetch(`${serverUrl}/api/customizations`);
+      if (response.ok) {
+        const data = await response.json();
+        setBackgroundImage(data.background || '');
+        setLogoImage(data.logo || '');
+        setSystemTitle(data.title || 'Painel de Controle');
+        setLogoSize(data.logoSize || 48);
+        setBackgroundOpacity(data.backgroundOpacity || 0.5);
+        setServerStatus('online');
+      } else {
+        throw new Error('Servidor indisponível');
+      }
+    } catch (error) {
+      console.error('Erro ao carregar configurações do servidor:', error);
+      setServerStatus('offline');
       
-      // Tentar salvar no backend também
-      try {
-        await fetch('http://localhost:3001/api/system-variables', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(systemVariables)
-        });
-      } catch (error) {
-        console.warn('Erro ao salvar no backend, salvando apenas localmente:', error);
+      // Fallback para localStorage
+      const savedBg = localStorage.getItem('loginBackground');
+      const savedLogo = localStorage.getItem('loginLogo');
+      const savedTitle = localStorage.getItem('loginTitle');
+      const savedOpacity = localStorage.getItem('backgroundOpacity');
+      const savedLogoSize = localStorage.getItem('logoSize');
+      
+      if (savedBg) setBackgroundImage(savedBg);
+      if (savedLogo) setLogoImage(savedLogo);
+      if (savedTitle) setSystemTitle(savedTitle);
+      if (savedOpacity) setBackgroundOpacity(parseFloat(savedOpacity));
+      if (savedLogoSize) setLogoSize(parseInt(savedLogoSize));
+      
+      // Carregar variáveis do sistema
+      const savedSystemVars = localStorage.getItem('systemVariables');
+      if (savedSystemVars) {
+        setSystemVariables(JSON.parse(savedSystemVars));
       }
 
-      toast({
-        title: "Configurações salvas!",
-        description: "Variáveis do sistema foram atualizadas",
-      });
-    } catch (error) {
-      console.error('Erro ao salvar configurações:', error);
-      toast({
-        title: "Erro",
-        description: "Falha ao salvar configurações",
-        variant: "destructive"
-      });
+      // Carregar variáveis de data
+      const savedDateVars = localStorage.getItem('dateVariables');
+      if (savedDateVars) {
+        setDateVariables(JSON.parse(savedDateVars));
+      }
+
+      // Carregar variáveis de banco
+      const savedDatabaseVars = localStorage.getItem('databaseVariables');
+      if (savedDatabaseVars) {
+        setDatabaseVariables(JSON.parse(savedDatabaseVars));
+      }
     }
   };
 
-  const saveCustomizations = async (data: any) => {
-    const currentHost = window.location.origin;
-    const apiUrl = 'http://localhost:3001/api/customizations';
-    
+  const saveAppearanceSettings = async () => {
+    const settings = {
+      background: backgroundImage,
+      logo: logoImage,
+      title: systemTitle,
+      logoSize: logoSize,
+      backgroundOpacity: backgroundOpacity
+    };
+
     try {
-      const response = await fetch(apiUrl, {
+      // Tentar salvar no servidor primeiro
+      const response = await fetch(`${serverUrl}/api/customizations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data)
+        body: JSON.stringify(settings)
       });
 
-      if (!response.ok) {
-        throw new Error('Falha ao salvar no servidor');
+      if (response.ok) {
+        toast({
+          title: "Configurações salvas!",
+          description: "Personalizações aplicadas com sucesso no servidor",
+        });
+        setServerStatus('online');
+      } else {
+        throw new Error(`Erro do servidor: ${response.status}`);
       }
-
-      // Aplicar personalizações imediatamente
-      applyCustomizations(data);
-
-      // Também salvar localmente como backup
-      Object.entries(data).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          if (key === 'logoSize') {
-            localStorage.setItem('logoSize', value.toString());
-          } else if (key === 'backgroundOpacity') {
-            localStorage.setItem('backgroundOpacity', value.toString());
-          } else {
-            localStorage.setItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`, value as string);
-          }
-        }
-      });
-
-      toast({
-        title: "Personalização salva!",
-        description: "Alterações aplicadas globalmente",
-      });
     } catch (error) {
-      console.error('Erro ao salvar personalizações:', error);
-      // Fallback para localStorage
-      Object.entries(data).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
-          if (key === 'logoSize') {
-            localStorage.setItem('logoSize', value.toString());
-          } else if (key === 'backgroundOpacity') {
-            localStorage.setItem('backgroundOpacity', value.toString());
-          } else {
-            localStorage.setItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`, value as string);
-          }
-        }
-      });
-
-      // Aplicar personalizações mesmo se o servidor falhar
-      applyCustomizations(data);
-
+      console.error('Erro ao salvar no servidor:', error);
+      setServerStatus('offline');
+      
+      // Salvar localmente como fallback
+      localStorage.setItem('loginBackground', backgroundImage);
+      localStorage.setItem('loginLogo', logoImage);
+      localStorage.setItem('loginTitle', systemTitle);
+      localStorage.setItem('logoSize', logoSize.toString());
+      localStorage.setItem('backgroundOpacity', backgroundOpacity.toString());
+      
       toast({
         title: "Dados salvos localmente",
-        description: `Servidor indisponível (tentativa: ${apiUrl}), salvo apenas neste navegador`,
+        description: `Servidor indisponível (tentativa: ${serverUrl}/api/customizations), salvo apenas neste navegador`,
         variant: "destructive"
       });
     }
   };
 
-  const applyCustomizations = (customizations: any) => {
-    // Aplicar background
-    if (customizations.background) {
-      document.body.style.backgroundImage = `url(${customizations.background})`;
-      document.body.style.backgroundSize = 'cover';
-      document.body.style.backgroundPosition = 'center';
-      document.body.style.backgroundAttachment = 'fixed';
-    } else {
-      document.body.style.backgroundImage = '';
-    }
-
-    // Aplicar overlay de transparência
-    if (customizations.backgroundOpacity !== undefined) {
-      const overlay = document.getElementById('dashboard-overlay');
-      if (overlay) {
-        overlay.style.backgroundColor = `rgba(15, 23, 42, ${1 - customizations.backgroundOpacity})`;
-      }
-    }
-
-    // Aplicar favicon
-    if (customizations.favicon) {
-      updateFavicon(customizations.favicon);
-    }
-
-    // Aplicar título da página
-    document.title = customizations.title || 'PAINEL DE CONTROLE';
-  };
-
-  const updateFavicon = (faviconUrl: string) => {
-    const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
-    link.type = 'image/png';
-    link.rel = 'icon';
-    link.href = faviconUrl;
-    document.getElementsByTagName('head')[0].appendChild(link);
-  };
-
-  const handleImageUpload = (file: File, type: 'background' | 'logo' | 'favicon') => {
-    if (!file.type.startsWith('image/')) {
+  const downloadBackgroundImage = () => {
+    if (!backgroundImage) {
       toast({
         title: "Erro",
-        description: "Por favor, selecione um arquivo de imagem",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const result = e.target?.result as string;
-      
-      const currentData = {
-        background: backgroundImage,
-        logo,
-        favicon,
-        title,
-        subtitle,
-        logoSize: logoSize[0],
-        backgroundOpacity: backgroundOpacity[0] / 100
-      };
-      
-      if (type === 'background') {
-        setBackgroundImage(result);
-        await saveCustomizations({ ...currentData, background: result });
-      } else if (type === 'logo') {
-        setLogo(result);
-        await saveCustomizations({ ...currentData, logo: result });
-      } else if (type === 'favicon') {
-        setFavicon(result);
-        updateFavicon(result);
-        await saveCustomizations({ ...currentData, favicon: result });
-      }
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const removeImage = async (type: 'background' | 'logo' | 'favicon') => {
-    const currentData = {
-      background: backgroundImage,
-      logo,
-      favicon,
-      title,
-      subtitle,
-      logoSize: logoSize[0],
-      backgroundOpacity: backgroundOpacity[0] / 100
-    };
-
-    if (type === 'background') {
-      setBackgroundImage('');
-      document.body.style.backgroundImage = '';
-      await saveCustomizations({ ...currentData, background: '' });
-    } else if (type === 'logo') {
-      setLogo('');
-      await saveCustomizations({ ...currentData, logo: '' });
-    } else if (type === 'favicon') {
-      setFavicon('');
-      const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-      if (link) {
-        link.href = '/favicon.ico';
-      }
-      await saveCustomizations({ ...currentData, favicon: '' });
-    }
-  };
-
-  const downloadImage = (imageData: string, filename: string) => {
-    if (!imageData) {
-      toast({
-        title: "Erro",
-        description: "Nenhuma imagem para baixar",
+        description: "Nenhuma imagem de fundo configurada",
         variant: "destructive"
       });
       return;
     }
 
     const link = document.createElement('a');
-    link.href = imageData;
-    link.download = filename;
+    link.href = backgroundImage;
+    link.download = 'background-image.jpg';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
 
     toast({
-      title: "Download concluído!",
-      description: `${filename} foi baixado`,
+      title: "Download iniciado",
+      description: "Imagem de fundo baixada com sucesso",
     });
   };
 
-  const addVariable = (type: 'date' | 'database') => {
-    if (!newVarKey.trim() || !newVarValue.trim()) {
+  const downloadLogoImage = () => {
+    if (!logoImage) {
       toast({
         title: "Erro",
-        description: "Nome e valor da variável são obrigatórios",
+        description: "Nenhum logo configurado",
         variant: "destructive"
       });
       return;
     }
 
-    setSystemVariables(prev => ({
-      ...prev,
-      [type]: {
-        ...prev[type],
-        [newVarKey.trim()]: newVarValue.trim()
-      }
-    }));
-
-    setNewVarKey('');
-    setNewVarValue('');
-    
-    toast({
-      title: "Variável adicionada!",
-      description: `${newVarKey} = ${newVarValue} adicionada ao tipo ${type === 'date' ? 'Data' : 'Banco'}`,
-    });
-  };
-
-  const removeVariable = (type: 'date' | 'database', key: string) => {
-    setSystemVariables(prev => {
-      const newVars = { ...prev[type] };
-      delete newVars[key];
-      return {
-        ...prev,
-        [type]: newVars
-      };
-    });
+    const link = document.createElement('a');
+    link.href = logoImage;
+    link.download = 'logo-image.png';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 
     toast({
-      title: "Variável removida!",
-      description: `${key} removida do tipo ${type === 'date' ? 'Data' : 'Banco'}`,
+      title: "Download iniciado",
+      description: "Logo baixado com sucesso",
     });
   };
 
-  const updateVariable = (type: 'date' | 'database', key: string, value: string) => {
-    setSystemVariables(prev => ({
-      ...prev,
-      [type]: {
-        ...prev[type],
-        [key]: value
-      }
-    }));
+  const saveSystemVariables = () => {
+    localStorage.setItem('systemVariables', JSON.stringify(systemVariables));
+    toast({
+      title: "Variáveis salvas!",
+      description: "Variáveis do sistema atualizadas com sucesso",
+    });
   };
 
-  const renderVariableEditor = (type: 'date' | 'database') => (
-    <div className="space-y-4">
-      <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
-        <h4 className="text-slate-300 mb-3 font-semibold flex items-center">
-          <Settings className="w-4 h-4 mr-2" />
-          Variáveis Fixas para {type === 'date' ? 'Comandos de Data' : 'Comandos de Banco'}
-        </h4>
-        
-        <div className="space-y-3">
-          {Object.entries(systemVariables[type]).map(([key, value]) => (
-            <div key={key} className="flex gap-2 items-center">
-              <div className="flex-1">
-                <Label className="text-xs text-slate-400 mb-1 block">Nome da Variável</Label>
-                <Input
-                  value={key}
-                  disabled
-                  className="bg-slate-700/50 border-slate-600 text-white"
-                  placeholder="Nome"
-                />
-              </div>
-              <div className="flex-2">
-                <Label className="text-xs text-slate-400 mb-1 block">Valor</Label>
-                <Input
-                  value={value}
-                  onChange={(e) => updateVariable(type, key, e.target.value)}
-                  className="bg-slate-700/50 border-slate-600 text-white"
-                  placeholder="Valor"
-                />
-              </div>
-              <div className="pt-5">
-                <Button
-                  onClick={() => removeVariable(type, key)}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              </div>
-            </div>
-          ))}
-        </div>
+  const addSystemVariable = (key: string, value: string) => {
+    setSystemVariables(prev => ({ ...prev, [key]: value }));
+  };
 
-        <div className="mt-4 p-3 bg-slate-700/30 rounded border-l-4 border-blue-500/50">
-          <h5 className="text-blue-400 font-semibold mb-2">Adicionar Nova Variável</h5>
-          <div className="flex gap-2">
-            <Input
-              value={newVarKey}
-              onChange={(e) => setNewVarKey(e.target.value)}
-              placeholder="Nome da variável (ex: SERVER_URL)"
-              className="bg-slate-700/50 border-slate-600 text-white"
-            />
-            <Input
-              value={newVarValue}
-              onChange={(e) => setNewVarValue(e.target.value)}
-              placeholder="Valor da variável (ex: http://localhost:8080)"
-              className="bg-slate-700/50 border-slate-600 text-white"
-            />
-            <Button
-              onClick={() => addVariable(type)}
-              variant="outline"
-              className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-          </div>
-        </div>
+  const deleteSystemVariable = (key: string) => {
+    const newVars = { ...systemVariables };
+    delete newVars[key];
+    setSystemVariables(newVars);
+  };
 
-        <div className="mt-4 p-3 bg-slate-700/20 rounded">
-          <p className="text-sm text-slate-400">
-            <strong>Como usar:</strong> Essas variáveis serão incluídas automaticamente quando os botões 
-            {type === 'date' ? ' "Aplicar Data"' : ' "Restaurar Banco"'} forem executados. 
-            Use a sintaxe <code className="bg-slate-600 px-1 rounded">$NOME_VARIAVEL</code> nos seus comandos.
-          </p>
-          <p className="text-xs text-slate-500 mt-2">
-            Exemplo: {type === 'date' ? 'echo "Alterando data para $NEW_DATE no servidor $SERVER_URL"' : 'mysqldump -h $DB_HOST -u $DB_USER database_name'}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
+  const saveDateVariables = () => {
+    localStorage.setItem('dateVariables', JSON.stringify(dateVariables));
+    toast({
+      title: "Variáveis salvas!",
+      description: "Variáveis de data atualizadas com sucesso",
+    });
+  };
+
+  const addDateVariable = (key: string, value: string) => {
+    setDateVariables(prev => ({ ...prev, [key]: value }));
+  };
+
+  const deleteDateVariable = (key: string) => {
+    const newVars = { ...dateVariables };
+    delete newVars[key];
+    setDateVariables(newVars);
+  };
+
+  const saveDatabaseVariables = () => {
+    localStorage.setItem('databaseVariables', JSON.stringify(databaseVariables));
+    toast({
+      title: "Variáveis salvas!",
+      description: "Variáveis de banco de dados atualizadas com sucesso",
+    });
+  };
+
+  const addDatabaseVariable = (key: string, value: string) => {
+    setDatabaseVariables(prev => ({ ...prev, [key]: value }));
+  };
+
+  const deleteDatabaseVariable = (key: string) => {
+    const newVars = { ...databaseVariables };
+    delete newVars[key];
+    setDatabaseVariables(newVars);
+  };
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center space-x-2">
-        <Settings className="w-5 h-5 text-purple-400" />
-        <h3 className="text-lg font-semibold text-purple-400">Configurações do Sistema</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-2">
+          <Settings className="w-5 h-5 text-orange-400" />
+          <h3 className="text-lg font-semibold text-orange-400">Configurações do Sistema</h3>
+        </div>
+        <div className="flex items-center space-x-2 text-sm">
+          <Server className="w-4 h-4" />
+          <span className={`px-2 py-1 rounded text-xs font-medium ${
+            serverStatus === 'online' ? 'bg-green-500/20 text-green-300' :
+            serverStatus === 'offline' ? 'bg-red-500/20 text-red-300' :
+            'bg-yellow-500/20 text-yellow-300'
+          }`}>
+            {serverStatus === 'online' ? 'Online' : 
+             serverStatus === 'offline' ? 'Offline' : 'Verificando...'}
+          </span>
+          <span className="text-slate-400 text-xs">{serverUrl}</span>
+        </div>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 border border-slate-600/30">
-          <TabsTrigger 
-            value="variables" 
-            className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300 hover:bg-slate-700/50"
-          >
-            Variáveis do Sistema
-          </TabsTrigger>
-          <TabsTrigger 
-            value="appearance" 
-            className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 hover:bg-slate-700/50"
-          >
+      <Tabs defaultValue="appearance" className="w-full">
+        <TabsList className="grid w-full grid-cols-4 bg-slate-800/50 border border-slate-600/30">
+          <TabsTrigger value="appearance" className="flex items-center gap-2 data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-300 hover:bg-slate-700/50">
+            <Palette className="w-4 h-4" />
             Aparência
           </TabsTrigger>
+          <TabsTrigger value="system" className="flex items-center gap-2 data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-300 hover:bg-slate-700/50">
+            <Settings className="w-4 h-4" />
+            Variáveis do Sistema
+          </TabsTrigger>
+          <TabsTrigger value="date" className="flex items-center gap-2 data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300 hover:bg-slate-700/50">
+            <Calendar className="w-4 h-4" />
+            Variáveis de Data
+          </TabsTrigger>
+          <TabsTrigger value="database" className="flex items-center gap-2 data-[state=active]:bg-green-500/20 data-[state=active]:text-green-300 hover:bg-slate-700/50">
+            <Database className="w-4 h-4" />
+            Variáveis de Banco
+          </TabsTrigger>
         </TabsList>
-        
-        <TabsContent value="variables" className="space-y-4">
-          <Tabs value={variableTab} onValueChange={setVariableTab} className="w-full">
-            <TabsList className="grid w-full grid-cols-2 bg-slate-700/50">
-              <TabsTrigger 
-                value="date" 
-                className="data-[state=active]:bg-blue-500/20 hover:bg-slate-600/50"
-              >
-                Variáveis de Data
-              </TabsTrigger>
-              <TabsTrigger 
-                value="database" 
-                className="data-[state=active]:bg-green-500/20 hover:bg-slate-600/50"
-              >
-                Variáveis de Banco
-              </TabsTrigger>
-            </TabsList>
-            
-            <TabsContent value="date" className="space-y-4">
-              {renderVariableEditor('date')}
-            </TabsContent>
-            
-            <TabsContent value="database" className="space-y-4">
-              {renderVariableEditor('database')}
-            </TabsContent>
-          </Tabs>
 
-          <Button 
-            onClick={saveSystemVariables}
-            className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-3"
-          >
-            <Save className="w-5 h-5 mr-2" />
-            Salvar Todas as Variáveis
-          </Button>
+        <TabsContent value="appearance" className="space-y-6">
+          <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-600/30">
+            <h4 className="text-lg font-semibold text-orange-400 mb-4">Personalização Visual</h4>
+            
+            {serverStatus === 'offline' && (
+              <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg mb-4">
+                <div className="flex items-center space-x-2">
+                  <AlertTriangle className="w-5 h-5 text-red-400" />
+                  <span className="text-red-300 font-medium">Servidor Indisponível</span>
+                </div>
+                <p className="text-red-200 text-sm mt-1">
+                  As configurações serão salvas apenas localmente. URL tentativa: {serverUrl}/api/customizations
+                </p>
+              </div>
+            )}
+            
+            <div className="space-y-6">
+              <div className="space-y-4">
+                <Label className="text-slate-300">Imagem de Fundo</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={backgroundImage}
+                    onChange={(e) => setBackgroundImage(e.target.value)}
+                    placeholder="URL da imagem de fundo"
+                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  />
+                  <Button 
+                    onClick={downloadBackgroundImage}
+                    disabled={!backgroundImage}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                </div>
+                {backgroundImage && (
+                  <div className="w-32 h-20 bg-cover bg-center rounded border border-slate-600" 
+                       style={{ backgroundImage: `url(${backgroundImage})` }} />
+                )}
+              </div>
 
-          <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
-            <p className="text-yellow-300 text-sm">
-              <strong>Importante:</strong> As variáveis configuradas aqui serão automaticamente incluídas 
-              na execução dos comandos dos botões "Aplicar Data" e "Restaurar Banco". Elas complementam 
-              as variáveis específicas de cada ação (como a data selecionada ou ambiente).
-            </p>
+              <div className="space-y-4">
+                <Label className="text-slate-300">Transparência do Fundo</Label>
+                <div className="space-y-2">
+                  <Slider
+                    value={[backgroundOpacity]}
+                    onValueChange={(value) => setBackgroundOpacity(value[0])}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>Opaco (0%)</span>
+                    <span className="font-medium">{Math.round(backgroundOpacity * 100)}%</span>
+                    <span>Transparente (100%)</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-slate-300">Logo do Sistema</Label>
+                <div className="flex space-x-2">
+                  <Input
+                    value={logoImage}
+                    onChange={(e) => setLogoImage(e.target.value)}
+                    placeholder="URL do logo"
+                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  />
+                  <Button 
+                    onClick={downloadLogoImage}
+                    disabled={!logoImage}
+                    variant="outline"
+                    size="sm"
+                    className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                  >
+                    <Download className="w-4 h-4" />
+                  </Button>
+                </div>
+                {logoImage && (
+                  <img src={logoImage} alt="Logo" className="w-16 h-16 object-contain rounded border border-slate-600" />
+                )}
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-slate-300">Tamanho do Logo (px)</Label>
+                <div className="space-y-2">
+                  <Slider
+                    value={[logoSize]}
+                    onValueChange={(value) => setLogoSize(value[0])}
+                    min={24}
+                    max={200}
+                    step={4}
+                    className="w-full"
+                  />
+                  <div className="flex justify-between text-xs text-slate-400">
+                    <span>24px</span>
+                    <span className="font-medium">{logoSize}px</span>
+                    <span>200px</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <Label className="text-slate-300">Título do Sistema</Label>
+                <Input
+                  value={systemTitle}
+                  onChange={(e) => setSystemTitle(e.target.value)}
+                  placeholder="Título que aparece na aba do navegador"
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                />
+              </div>
+
+              <Button onClick={saveAppearanceSettings} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
+                Salvar Aparência
+              </Button>
+            </div>
           </div>
         </TabsContent>
-        
-        <TabsContent value="appearance" className="space-y-6">
-          {/* Papel de Parede */}
-          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
-            <h4 className="text-slate-300 mb-3 font-semibold flex items-center">
-              <Palette className="w-4 h-4 mr-2" />
-              Papel de Parede Global
-            </h4>
+
+        <TabsContent value="system" className="space-y-6">
+          <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-600/30">
+            <h4 className="text-lg font-semibold text-blue-400 mb-4">Variáveis do Sistema</h4>
+            <p className="text-slate-400 text-sm mb-4">
+              Defina variáveis globais que podem ser usadas em todos os scripts e comandos.
+            </p>
+
             <div className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImageUpload(file, 'background');
-                  }}
-                  className="bg-slate-700/50 border-slate-600 text-white text-xs"
-                />
-                {backgroundImage && (
-                  <>
-                    <Button
-                      onClick={() => downloadImage(backgroundImage, 'background.png')}
-                      variant="outline"
-                      size="sm"
-                      className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      onClick={() => removeImage('background')}
-                      variant="outline"
-                      size="sm"
-                      className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-              
-              {backgroundImage && (
-                <>
-                  <div className="w-full h-20 bg-cover bg-center rounded border border-slate-600" 
-                       style={{ backgroundImage: `url(${backgroundImage})` }}
+              {Object.entries(systemVariables).map(([key, value]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <Input
+                    type="text"
+                    value={value}
+                    onChange={(e) => addSystemVariable(key, e.target.value)}
+                    placeholder={`Valor para ${key}`}
+                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
                   />
-                  
-                  <div className="space-y-2">
-                    <Label className="text-slate-300">Transparência do Background ({backgroundOpacity[0]}%)</Label>
-                    <Slider
-                      value={backgroundOpacity}
-                      onValueChange={(value) => {
-                        setBackgroundOpacity(value);
-                        const currentData = {
-                          background: backgroundImage,
-                          logo,
-                          favicon,
-                          title,
-                          subtitle,
-                          logoSize: logoSize[0],
-                          backgroundOpacity: value[0] / 100
-                        };
-                        saveCustomizations(currentData);
-                      }}
-                      max={100}
-                      step={5}
-                      className="w-full"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Logo */}
-          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
-            <h4 className="text-slate-300 mb-3 font-semibold">Logo do Sistema</h4>
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImageUpload(file, 'logo');
-                  }}
-                  className="bg-slate-700/50 border-slate-600 text-white text-xs"
-                />
-                {logo && (
-                  <>
-                    <Button
-                      onClick={() => downloadImage(logo, 'logo.png')}
-                      variant="outline"
-                      size="sm"
-                      className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      onClick={() => removeImage('logo')}
-                      variant="outline"
-                      size="sm"
-                      className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-              
-              {logo && (
-                <>
-                  <div className="w-full h-16 flex items-center justify-center bg-slate-700/30 rounded border border-slate-600">
-                    <img 
-                      src={logo} 
-                      alt="Logo preview" 
-                      className="object-contain"
-                      style={{ height: `${logoSize[0]}px` }}
-                    />
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <Label className="text-slate-300">Tamanho do Logo ({logoSize[0]}px)</Label>
-                    <Slider
-                      value={logoSize}
-                      onValueChange={(value) => {
-                        setLogoSize(value);
-                        const currentData = {
-                          background: backgroundImage,
-                          logo,
-                          favicon,
-                          title,
-                          subtitle,
-                          logoSize: value[0],
-                          backgroundOpacity: backgroundOpacity[0] / 100
-                        };
-                        saveCustomizations(currentData);
-                      }}
-                      min={24}
-                      max={128}
-                      step={4}
-                      className="w-full"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-
-          {/* Favicon */}
-          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
-            <h4 className="text-slate-300 mb-3 font-semibold">Favicon</h4>
-            <div className="space-y-4">
-              <div className="flex gap-2">
-                <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleImageUpload(file, 'favicon');
-                  }}
-                  className="bg-slate-700/50 border-slate-600 text-white text-xs"
-                />
-                {favicon && (
-                  <>
-                    <Button
-                      onClick={() => downloadImage(favicon, 'favicon.png')}
-                      variant="outline"
-                      size="sm"
-                      className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                    >
-                      <Download className="w-4 h-4" />
-                    </Button>
-                    <Button
-                      onClick={() => removeImage('favicon')}
-                      variant="outline"
-                      size="sm"
-                      className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                    >
-                      <X className="w-4 h-4" />
-                    </Button>
-                  </>
-                )}
-              </div>
-              {favicon && (
-                <div className="w-8 h-8 flex items-center justify-center bg-slate-700/30 rounded border border-slate-600">
-                  <img src={favicon} alt="Favicon preview" className="w-6 h-6 object-contain" />
+                  <Label className="text-slate-300">{key}</Label>
+                  <Button
+                    onClick={() => deleteSystemVariable(key)}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
                 </div>
-              )}
+              ))}
+
+              <div className="flex items-center space-x-3">
+                <Input
+                  type="text"
+                  placeholder="Nome da variável"
+                  className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.value) {
+                      const newKey = e.target.value;
+                      addSystemVariable(newKey, '');
+                      e.target.value = '';
+                    }
+                  }}
+                />
+                <Button
+                  onClick={() => {
+                    const input = document.querySelector<HTMLInputElement>('input[placeholder="Nome da variável"]');
+                    if (input && input.value) {
+                      const newKey = input.value;
+                      addSystemVariable(newKey, '');
+                      input.value = '';
+                    }
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                >
+                  Adicionar
+                </Button>
+              </div>
+
+              <Button onClick={saveSystemVariables} className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
+                Salvar Variáveis
+              </Button>
             </div>
           </div>
+        </TabsContent>
 
-          {/* Textos */}
-          <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
-            <h4 className="text-slate-300 mb-3 font-semibold">Textos do Sistema</h4>
+        <TabsContent value="date" className="space-y-6">
+          <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-600/30">
+            <h4 className="text-lg font-semibold text-purple-400 mb-4">Variáveis de Data</h4>
+            <p className="text-slate-400 text-sm mb-4">
+              Defina variáveis de data personalizadas para usar nos seus scripts e comandos.
+            </p>
+
             <div className="space-y-4">
-              <div className="space-y-2">
-                <Label className="text-slate-300">Título Principal</Label>
+              {Object.entries(dateVariables).map(([key, value]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <Input
+                    type="text"
+                    value={value}
+                    onChange={(e) => addDateVariable(key, e.target.value)}
+                    placeholder={`Valor para ${key}`}
+                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  />
+                  <Label className="text-slate-300">{key}</Label>
+                  <Button
+                    onClick={() => deleteDateVariable(key)}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+
+              <div className="flex items-center space-x-3">
                 <Input
                   type="text"
-                  value={title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    const currentData = {
-                      background: backgroundImage,
-                      logo,
-                      favicon,
-                      title: e.target.value,
-                      subtitle,
-                      logoSize: logoSize[0],
-                      backgroundOpacity: backgroundOpacity[0] / 100
-                    };
-                    saveCustomizations(currentData);
+                  placeholder="Nome da variável"
+                  className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.value) {
+                      const newKey = e.target.value;
+                      addDateVariable(newKey, '');
+                      e.target.value = '';
+                    }
                   }}
-                  placeholder="PAINEL DE CONTROLE"
-                  className="bg-slate-700/50 border-slate-600 text-white"
                 />
+                <Button
+                  onClick={() => {
+                    const input = document.querySelector<HTMLInputElement>('input[placeholder="Nome da variável"]');
+                    if (input && input.value) {
+                      const newKey = input.value;
+                      addDateVariable(newKey, '');
+                      input.value = '';
+                    }
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                >
+                  Adicionar
+                </Button>
               </div>
 
-              <div className="space-y-2">
-                <Label className="text-slate-300">Subtítulo</Label>
+              <Button onClick={saveDateVariables} className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600">
+                Salvar Variáveis
+              </Button>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="database" className="space-y-6">
+          <div className="p-6 bg-slate-800/50 rounded-lg border border-slate-600/30">
+            <h4 className="text-lg font-semibold text-green-400 mb-4">Variáveis de Banco de Dados</h4>
+            <p className="text-slate-400 text-sm mb-4">
+              Configure variáveis específicas para operações de banco de dados.
+            </p>
+
+            <div className="space-y-4">
+              {Object.entries(databaseVariables).map(([key, value]) => (
+                <div key={key} className="flex items-center space-x-3">
+                  <Input
+                    type="text"
+                    value={value}
+                    onChange={(e) => addDatabaseVariable(key, e.target.value)}
+                    placeholder={`Valor para ${key}`}
+                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  />
+                  <Label className="text-slate-300">{key}</Label>
+                  <Button
+                    onClick={() => deleteDatabaseVariable(key)}
+                    variant="outline"
+                    size="sm"
+                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              ))}
+
+              <div className="flex items-center space-x-3">
                 <Input
                   type="text"
-                  value={subtitle}
-                  onChange={(e) => {
-                    setSubtitle(e.target.value);
-                    const currentData = {
-                      background: backgroundImage,
-                      logo,
-                      favicon,
-                      title,
-                      subtitle: e.target.value,
-                      logoSize: logoSize[0],
-                      backgroundOpacity: backgroundOpacity[0] / 100
-                    };
-                    saveCustomizations(currentData);
+                  placeholder="Nome da variável"
+                  className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.target instanceof HTMLInputElement && e.target.value) {
+                      const newKey = e.target.value;
+                      addDatabaseVariable(newKey, '');
+                      e.target.value = '';
+                    }
                   }}
-                  placeholder="Sistema de Gerenciamento Docker"
-                  className="bg-slate-700/50 border-slate-600 text-white"
                 />
+                <Button
+                  onClick={() => {
+                    const input = document.querySelector<HTMLInputElement>('input[placeholder="Nome da variável"]');
+                    if (input && input.value) {
+                      const newKey = input.value;
+                      addDatabaseVariable(newKey, '');
+                      input.value = '';
+                    }
+                  }}
+                  variant="outline"
+                  size="sm"
+                  className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                >
+                  Adicionar
+                </Button>
               </div>
+
+              <Button onClick={saveDatabaseVariables} className="w-full bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600">
+                Salvar Variáveis
+              </Button>
             </div>
           </div>
         </TabsContent>

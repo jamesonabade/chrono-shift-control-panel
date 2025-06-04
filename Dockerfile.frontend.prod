@@ -1,0 +1,61 @@
+
+FROM node:20-bookworm
+
+# Configurar locale e timezone
+RUN apt-get update && apt-get install -y \
+    locales \
+    tzdata \
+    && rm -rf /var/lib/apt/lists/*
+
+# Configurar locale para pt_BR.UTF-8
+RUN sed -i '/^#.* pt_BR.UTF-8 /s/^#//' /etc/locale.gen && \
+    locale-gen && \
+    echo "LANG=pt_BR.UTF-8" > /etc/default/locale
+
+# Configurar timezone para America/Bahia
+RUN ln -fs /usr/share/zoneinfo/America/Bahia /etc/localtime && \
+    echo "America/Bahia" > /etc/timezone && \
+    dpkg-reconfigure -f noninteractive tzdata
+
+# Definir variáveis de ambiente
+ENV LANG=pt_BR.UTF-8
+ENV LC_ALL=pt_BR.UTF-8
+ENV TZ=America/Bahia
+
+WORKDIR /app
+
+# Instalar bash e curl
+RUN apt-get update && apt-get install -y bash curl && rm -rf /var/lib/apt/lists/*
+
+# Criar diretórios necessários
+RUN mkdir -p /app/scripts /app/logs /app/data
+
+# Copiar package files
+COPY package*.json ./
+
+# Instalar dependências
+RUN npm ci --only=production
+
+# Copiar código fonte
+COPY . .
+
+# Copiar arquivo de ambiente de produção se existir
+COPY .env.production* ./
+
+# Build da aplicação
+RUN npm run build
+
+# Instalar servidor estático global
+RUN npm install -g serve
+
+# Dar permissões aos scripts
+RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
+RUN chmod -R 755 /app/scripts 2>/dev/null || true
+RUN chmod -R 755 /app/logs 2>/dev/null || true
+RUN chmod -R 755 /app/data 2>/dev/null || true
+
+# Expor porta
+EXPOSE 8080
+
+# Comando para iniciar (servir arquivos estáticos)
+CMD ["serve", "-s", "dist", "-l", "8080"]

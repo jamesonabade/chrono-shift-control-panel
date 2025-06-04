@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Calendar, Database, FileCode, FileText, Upload, Users, User, Power, Terminal, Settings } from 'lucide-react';
 import DateSelector from '@/components/DateSelector';
@@ -38,28 +37,23 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
           setLogoSize(customizations.logoSize || 48);
         }
 
-        // Aplicar background com transparência
+        // Aplicar background com transparência configurável
         if (customizations.background) {
           const opacity = customizations.backgroundOpacity || 0.5;
           setBackgroundOpacity(opacity);
+          
+          // Aplicar fundo na body
           document.body.style.backgroundImage = `url(${customizations.background})`;
           document.body.style.backgroundSize = 'cover';
           document.body.style.backgroundPosition = 'center';
           document.body.style.backgroundAttachment = 'fixed';
+          document.body.style.backgroundRepeat = 'no-repeat';
           
-          // Aplicar overlay de transparência
-          const overlay = document.getElementById('dashboard-overlay') || document.createElement('div');
-          overlay.id = 'dashboard-overlay';
-          overlay.style.position = 'fixed';
-          overlay.style.top = '0';
-          overlay.style.left = '0';
-          overlay.style.width = '100%';
-          overlay.style.height = '100%';
-          overlay.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
-          overlay.style.pointerEvents = 'none';
-          overlay.style.zIndex = '-1';
-          if (!document.getElementById('dashboard-overlay')) {
-            document.body.appendChild(overlay);
+          // Criar overlay de transparência no dashboard
+          const dashboardElement = document.getElementById('dashboard-main');
+          if (dashboardElement) {
+            dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+            dashboardElement.style.backdropFilter = 'blur(2px)';
           }
         }
 
@@ -82,19 +76,12 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         document.body.style.backgroundSize = 'cover';
         document.body.style.backgroundPosition = 'center';
         document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundRepeat = 'no-repeat';
         
-        const overlay = document.getElementById('dashboard-overlay') || document.createElement('div');
-        overlay.id = 'dashboard-overlay';
-        overlay.style.position = 'fixed';
-        overlay.style.top = '0';
-        overlay.style.left = '0';
-        overlay.style.width = '100%';
-        overlay.style.height = '100%';
-        overlay.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
-        overlay.style.pointerEvents = 'none';
-        overlay.style.zIndex = '-1';
-        if (!document.getElementById('dashboard-overlay')) {
-          document.body.appendChild(overlay);
+        const dashboardElement = document.getElementById('dashboard-main');
+        if (dashboardElement) {
+          dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+          dashboardElement.style.backdropFilter = 'blur(2px)';
         }
       }
       
@@ -149,10 +136,13 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   };
 
   return (
-    <div className="flex h-screen bg-slate-900 text-white relative">
+    <div id="dashboard-main" className="flex h-screen text-white relative" style={{ 
+      backgroundColor: `rgba(15, 23, 42, ${1 - backgroundOpacity})`,
+      backdropFilter: 'blur(2px)'
+    }}>
       {/* Sidebar */}
-      <div className="w-64 bg-slate-800/90 backdrop-blur-sm border-r border-slate-700 flex flex-col relative z-10">
-        <div className="p-4 border-b border-slate-700 flex flex-col space-y-2">
+      <div className="w-64 bg-slate-800/70 backdrop-blur-sm border-r border-slate-700/50 flex flex-col relative z-10">
+        <div className="p-4 border-b border-slate-700/50 flex flex-col space-y-2">
           {customLogo ? (
             <div className="flex items-center justify-center">
               <img 
@@ -270,14 +260,14 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
           )}
         </div>
         
-        <div className="p-4 border-t border-slate-700">
+        <div className="p-4 border-t border-slate-700/50">
           <div className="flex items-center space-x-2 mb-2 text-sm text-slate-400">
             <User className="w-4 h-4" />
             <span>{currentUser}</span>
           </div>
           <button
             onClick={onLogout}
-            className="w-full px-4 py-2 rounded-lg font-medium bg-red-600 hover:bg-red-700 text-white transition-colors"
+            className="w-full px-4 py-2 rounded-lg font-medium bg-red-600/80 hover:bg-red-700/80 text-white transition-colors backdrop-blur-sm"
           >
             <Power className="w-4 h-4 mr-2 inline" />
             Sair
@@ -286,7 +276,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-6 bg-slate-900/80 backdrop-blur-sm relative z-10">
+      <div className="flex-1 p-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
         {renderContent()}
       </div>
     </div>
