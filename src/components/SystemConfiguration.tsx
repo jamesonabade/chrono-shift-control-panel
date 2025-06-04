@@ -5,7 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Settings, Palette, Database, Calendar, Download, Upload, Eye, EyeOff, Server, AlertTriangle } from 'lucide-react';
+import { Settings, Palette, Database, Calendar, Download, Upload, Eye, EyeOff, Server, AlertTriangle, Trash } from 'lucide-react';
 
 const SystemConfiguration = () => {
   const [backgroundImage, setBackgroundImage] = useState('');
@@ -29,10 +29,16 @@ const SystemConfiguration = () => {
   const checkServerStatus = async () => {
     setServerStatus('checking');
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
       const response = await fetch(`${serverUrl}/api/health`, { 
         method: 'GET',
-        timeout: 5000 
+        signal: controller.signal
       });
+      
+      clearTimeout(timeoutId);
+      
       if (response.ok) {
         setServerStatus('online');
       } else {
@@ -429,7 +435,7 @@ const SystemConfiguration = () => {
                     size="sm"
                     className="border-red-500/50 text-red-400 hover:bg-red-500/20"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash className="w-4 h-4" />
                   </Button>
                 </div>
               ))}
@@ -495,7 +501,7 @@ const SystemConfiguration = () => {
                     size="sm"
                     className="border-red-500/50 text-red-400 hover:bg-red-500/20"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash className="w-4 h-4" />
                   </Button>
                 </div>
               ))}
@@ -561,7 +567,7 @@ const SystemConfiguration = () => {
                     size="sm"
                     className="border-red-500/50 text-red-400 hover:bg-red-500/20"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    <Trash className="w-4 h-4" />
                   </Button>
                 </div>
               ))}
