@@ -18,12 +18,51 @@ const Index = () => {
   const handleLogin = () => {
     setIsAuthenticated(true);
     localStorage.setItem('isAuthenticated', 'true');
+    
+    // Log da ação de login
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      action: 'USER_LOGIN',
+      details: {
+        user: localStorage.getItem('currentUser'),
+        success: true
+      },
+      message: 'Login realizado com sucesso'
+    };
+    
+    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+    logs.push(logEntry);
+    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
   };
 
   const handleLogout = () => {
+    // Log da ação de logout
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      action: 'USER_LOGOUT',
+      details: {
+        user: localStorage.getItem('currentUser'),
+        success: true
+      },
+      message: 'Logout realizado com sucesso'
+    };
+    
+    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+    logs.push(logEntry);
+    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+    
     setIsAuthenticated(false);
     localStorage.removeItem('isAuthenticated');
     localStorage.removeItem('currentUser');
+    
+    // Limpar personalizações de background no logout
+    document.body.style.backgroundImage = '';
+    const overlay = document.getElementById('dashboard-overlay');
+    if (overlay) {
+      overlay.remove();
+    }
   };
 
   if (!isAuthenticated) {

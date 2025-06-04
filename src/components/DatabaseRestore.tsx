@@ -24,7 +24,21 @@ const DatabaseRestore = () => {
     setIsExecuting(true);
 
     try {
-      // Carregar variáveis fixas do sistema se existirem
+      // Carregar comandos vinculados ao botão banco
+      const commands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
+      const databaseCommands = commands.database || [];
+
+      if (databaseCommands.length === 0) {
+        toast({
+          title: "Nenhum comando configurado",
+          description: "Configure comandos para o botão Banco na seção Comandos",
+          variant: "destructive"
+        });
+        setIsExecuting(false);
+        return;
+      }
+
+      // Carregar variáveis fixas do sistema
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
       
       const envVariables = {
@@ -33,38 +47,50 @@ const DatabaseRestore = () => {
         ...systemVars.database
       };
 
-      const response = await fetch('http://localhost:3001/api/execute-command', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          command: 'bash /app/scripts/restore_db.sh',
-          name: 'Restaurar Banco',
-          description: `Restaurar banco de dados - Ambiente: ${environment}`,
-          environment: envVariables
-        })
-      });
+      // Executar todos os comandos vinculados
+      let allSuccess = true;
+      for (const commandId of databaseCommands) {
+        const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');
+        const command = allCommands.find((cmd: any) => cmd.id === commandId);
+        
+        if (command) {
+          const response = await fetch('http://localhost:3001/api/execute-command', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              command: command.command,
+              name: `Banco: ${command.name}`,
+              description: `Restaurar banco de dados - Ambiente: ${environment} - ${command.description}`,
+              environment: envVariables
+            })
+          });
 
-      const result = await response.json();
-      
-      if (result.success) {
+          const result = await response.json();
+          
+          if (!result.success) {
+            allSuccess = false;
+            toast({
+              title: `Erro no comando: ${command.name}`,
+              description: result.error || "Falha na execução",
+              variant: "destructive"
+            });
+          }
+        }
+      }
+
+      if (allSuccess) {
         toast({
           title: "Banco restaurado!",
           description: `Restauração concluída no ambiente ${environment}`,
-        });
-      } else {
-        toast({
-          title: "Erro na execução",
-          description: result.error || "Falha ao restaurar banco",
-          variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Erro na execução:', error);
       toast({
         title: "Erro",
-        description: `Erro ao executar comando: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        description: `Erro ao executar comandos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         variant: "destructive"
       });
     } finally {
@@ -86,9 +112,9 @@ const DatabaseRestore = () => {
             <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
               <SelectValue placeholder="Selecione o ambiente" />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="DEV">DEV</SelectItem>
-              <SelectItem value="TESTES">TESTES</SelectItem>
+            <SelectContent className="bg-slate-800 border-slate-600 text-white">
+              <SelectItem value="DEV" className="hover:bg-slate-700">DEV</SelectItem>
+              <SelectItem value="TESTES" className="hover:bg-slate-700">TESTES</SelectItem>
             </SelectContent>
           </Select>
         </div>

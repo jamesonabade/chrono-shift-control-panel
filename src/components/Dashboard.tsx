@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Calendar, Database, FileCode, FileText, Upload, Users, User, Power, Terminal, Settings } from 'lucide-react';
 import DateSelector from '@/components/DateSelector';
@@ -12,6 +11,8 @@ import DateTime from '@/components/DateTime';
 
 const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('date');
+  const [customLogo, setCustomLogo] = useState('');
+  const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
 
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
@@ -29,12 +30,34 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       if (response.ok) {
         const customizations = await response.json();
         
-        // Aplicar background
+        // Aplicar logo
+        if (customizations.logo) {
+          setCustomLogo(customizations.logo);
+        }
+
+        // Aplicar background com transparência
         if (customizations.background) {
+          const opacity = customizations.backgroundOpacity || 0.5;
+          setBackgroundOpacity(opacity);
           document.body.style.backgroundImage = `url(${customizations.background})`;
           document.body.style.backgroundSize = 'cover';
           document.body.style.backgroundPosition = 'center';
           document.body.style.backgroundAttachment = 'fixed';
+          
+          // Aplicar overlay de transparência
+          const overlay = document.getElementById('dashboard-overlay') || document.createElement('div');
+          overlay.id = 'dashboard-overlay';
+          overlay.style.position = 'fixed';
+          overlay.style.top = '0';
+          overlay.style.left = '0';
+          overlay.style.width = '100%';
+          overlay.style.height = '100%';
+          overlay.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+          overlay.style.pointerEvents = 'none';
+          overlay.style.zIndex = '-1';
+          if (!document.getElementById('dashboard-overlay')) {
+            document.body.appendChild(overlay);
+          }
         }
 
         // Aplicar título
@@ -46,11 +69,33 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       console.error('Erro ao carregar personalizações:', error);
       // Fallback para localStorage
       const bgImage = localStorage.getItem('loginBackground');
+      const logo = localStorage.getItem('loginLogo');
+      const opacity = parseFloat(localStorage.getItem('backgroundOpacity') || '0.5');
+      
       if (bgImage) {
+        setBackgroundOpacity(opacity);
         document.body.style.backgroundImage = `url(${bgImage})`;
         document.body.style.backgroundSize = 'cover';
         document.body.style.backgroundPosition = 'center';
         document.body.style.backgroundAttachment = 'fixed';
+        
+        const overlay = document.getElementById('dashboard-overlay') || document.createElement('div');
+        overlay.id = 'dashboard-overlay';
+        overlay.style.position = 'fixed';
+        overlay.style.top = '0';
+        overlay.style.left = '0';
+        overlay.style.width = '100%';
+        overlay.style.height = '100%';
+        overlay.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+        overlay.style.pointerEvents = 'none';
+        overlay.style.zIndex = '-1';
+        if (!document.getElementById('dashboard-overlay')) {
+          document.body.appendChild(overlay);
+        }
+      }
+      
+      if (logo) {
+        setCustomLogo(logo);
       }
     }
   };
@@ -98,38 +143,13 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
     }
   };
 
-  // Carregar logo personalizado
-  const [customLogo, setCustomLogo] = useState('');
-
-  useEffect(() => {
-    const loadCustomLogo = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/api/customizations');
-        if (response.ok) {
-          const customizations = await response.json();
-          if (customizations.logo) {
-            setCustomLogo(customizations.logo);
-          }
-        }
-      } catch (error) {
-        // Fallback para localStorage
-        const logo = localStorage.getItem('loginLogo');
-        if (logo) {
-          setCustomLogo(logo);
-        }
-      }
-    };
-
-    loadCustomLogo();
-  }, []);
-
   return (
-    <div className="flex h-screen bg-slate-900 text-white">
+    <div className="flex h-screen bg-slate-900 text-white relative">
       {/* Sidebar */}
-      <div className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
+      <div className="w-64 bg-slate-800/90 backdrop-blur-sm border-r border-slate-700 flex flex-col relative z-10">
         <div className="p-4 border-b border-slate-700 flex flex-col space-y-2">
           {customLogo ? (
-            <img src={customLogo} alt="Logo" className="h-8 object-contain" />
+            <img src={customLogo} alt="Logo" className="h-12 object-contain" />
           ) : (
             <div className="text-xl font-semibold text-purple-400">
               Painel de Controle
@@ -137,6 +157,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
           )}
           <DateTime className="text-xs" />
         </div>
+        
         <div className="p-4 space-y-2 flex-1">
           {permissions.date && (
             <button
@@ -236,6 +257,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
             </button>
           )}
         </div>
+        
         <div className="p-4 border-t border-slate-700">
           <div className="flex items-center space-x-2 mb-2 text-sm text-slate-400">
             <User className="w-4 h-4" />
@@ -252,7 +274,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-6">
+      <div className="flex-1 p-6 bg-slate-900/80 backdrop-blur-sm relative z-10">
         {renderContent()}
       </div>
     </div>

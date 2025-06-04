@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { FileText, Download, Eye, AlertCircle, CheckCircle, XCircle, Terminal, Server, MonitorSpeaker } from 'lucide-react';
+import { FileText, Download, Eye, AlertCircle, CheckCircle, XCircle, Terminal, Server, MonitorSpeaker, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface LogEntry {
   timestamp: string;
@@ -17,16 +17,21 @@ interface LogEntry {
 
 const SystemLogs = () => {
   const [backendLogs, setBackendLogs] = useState<LogEntry[]>([]);
-  const [frontendLogs] = useState<LogEntry[]>([]);
+  const [frontendLogs, setFrontendLogs] = useState<LogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [activeTab, setActiveTab] = useState('backend');
+  const [expandedLogs, setExpandedLogs] = useState<Set<number>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
     loadBackendLogs();
-    const interval = setInterval(loadBackendLogs, 5000);
+    loadFrontendLogs();
+    const interval = setInterval(() => {
+      loadBackendLogs();
+      loadFrontendLogs();
+    }, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -41,14 +46,23 @@ const SystemLogs = () => {
         throw new Error('Falha ao carregar logs');
       }
     } catch (error) {
-      console.error('Erro ao carregar logs:', error);
+      console.error('Erro ao carregar logs do backend:', error);
       toast({
         title: "Erro",
-        description: `Erro ao carregar logs do backend (http://localhost:3001/api/backend-logs)`,
+        description: `Erro ao carregar logs do backend`,
         variant: "destructive"
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadFrontendLogs = () => {
+    try {
+      const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+      setFrontendLogs(logs.reverse());
+    } catch (error) {
+      console.error('Erro ao carregar logs do frontend:', error);
     }
   };
 
@@ -95,46 +109,47 @@ const SystemLogs = () => {
     return details && (details.stdout || details.stderr || details.output);
   };
 
-  const renderExecutionOutput = (details: any) => {
+  const toggleLogExpansion = (index: number) => {
+    const newExpanded = new Set(expandedLogs);
+    if (newExpanded.has(index)) {
+      newExpanded.delete(index);
+    } else {
+      newExpanded.add(index);
+    }
+    setExpandedLogs(newExpanded);
+  };
+
+  const renderExecutionOutput = (details: any, isExpanded: boolean = false) => {
     if (!hasExecutionOutput(details)) return null;
+
+    const renderOutput = (type: 'stdout' | 'stderr' | 'output', content: string, color: string, icon: any, label: string) => {
+      if (!content) return null;
+      
+      const preview = content.slice(0, 150);
+      const hasMore = content.length > 150;
+      
+      return (
+        <div className={`bg-${color}-500/10 border border-${color}-500/30 rounded-lg p-3`}>
+          <div className="flex items-center mb-2">
+            {icon}
+            <span className={`text-${color}-400 font-semibold ml-2`}>{label}</span>
+            {hasMore && !isExpanded && (
+              <span className="text-xs text-slate-400 ml-2">({content.length} caracteres)</span>
+            )}
+          </div>
+          <pre className={`text-sm text-${color}-300 whitespace-pre-wrap font-mono bg-${color}-900/20 p-2 rounded`}>
+            {isExpanded ? content : preview}
+            {hasMore && !isExpanded && '...'}
+          </pre>
+        </div>
+      );
+    };
 
     return (
       <div className="mt-4 space-y-3">
-        {details.stdout && (
-          <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3">
-            <div className="flex items-center mb-2">
-              <CheckCircle className="w-4 h-4 text-green-400 mr-2" />
-              <span className="text-green-400 font-semibold">STDOUT (Saída)</span>
-            </div>
-            <pre className="text-sm text-green-300 whitespace-pre-wrap font-mono bg-green-900/20 p-2 rounded">
-              {details.stdout}
-            </pre>
-          </div>
-        )}
-        
-        {details.stderr && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3">
-            <div className="flex items-center mb-2">
-              <XCircle className="w-4 h-4 text-red-400 mr-2" />
-              <span className="text-red-400 font-semibold">STDERR (Erro)</span>
-            </div>
-            <pre className="text-sm text-red-300 whitespace-pre-wrap font-mono bg-red-900/20 p-2 rounded">
-              {details.stderr}
-            </pre>
-          </div>
-        )}
-
-        {details.output && !details.stdout && (
-          <div className="bg-blue-500/10 border border-blue-500/30 rounded-lg p-3">
-            <div className="flex items-center mb-2">
-              <Terminal className="w-4 h-4 text-blue-400 mr-2" />
-              <span className="text-blue-400 font-semibold">OUTPUT</span>
-            </div>
-            <pre className="text-sm text-blue-300 whitespace-pre-wrap font-mono bg-blue-900/20 p-2 rounded">
-              {details.output}
-            </pre>
-          </div>
-        )}
+        {details.stdout && renderOutput('stdout', details.stdout, 'green', <CheckCircle className="w-4 h-4 text-green-400" />, 'STDOUT (Saída)', )}
+        {details.stderr && renderOutput('stderr', details.stderr, 'red', <XCircle className="w-4 h-4 text-red-400" />, 'STDERR (Erro)')}
+        {details.output && !details.stdout && renderOutput('output', details.output, 'blue', <Terminal className="w-4 h-4 text-blue-400" />, 'OUTPUT')}
       </div>
     );
   };
@@ -192,59 +207,80 @@ const SystemLogs = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {logs.map((log, index) => (
-            <div key={index} className={`p-4 rounded-lg border ${getLevelColor(log.level)}`}>
-              <div className="flex items-start justify-between">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center space-x-2 mb-2">
-                    {getLevelIcon(log.level)}
-                    <span className="font-semibold">{log.action}</span>
-                    <span className="text-xs opacity-75">
-                      {new Date(log.timestamp).toLocaleString('pt-BR')}
-                    </span>
+          {logs.map((log, index) => {
+            const isExpanded = expandedLogs.has(index);
+            const hasOutput = hasExecutionOutput(log.details);
+            
+            return (
+              <div key={index} className={`p-4 rounded-lg border ${getLevelColor(log.level)}`}>
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center space-x-2 mb-2">
+                      {getLevelIcon(log.level)}
+                      <span className="font-semibold">{log.action}</span>
+                      <span className="text-xs opacity-75">
+                        {new Date(log.timestamp).toLocaleString('pt-BR')}
+                      </span>
+                    </div>
+                    
+                    <p className="text-sm mb-2 opacity-90">
+                      {typeof log.details === 'string' ? log.details : 
+                       log.details?.scriptName ? `Script: ${log.details.scriptName}` :
+                       log.details?.command ? `Comando: ${log.details.command}` :
+                       log.details?.fileName ? `Arquivo: ${log.details.fileName}` :
+                       'Operação do sistema'}
+                    </p>
+
+                    {hasOutput && (
+                      <div className="space-y-2">
+                        {log.details.stdout && (
+                          <div className="text-xs">
+                            <span className="text-green-400 font-semibold bg-green-500/20 px-2 py-1 rounded">✓ STDOUT</span>
+                            <span className="ml-2 opacity-75">
+                              {log.details.stdout.slice(0, 100)}{log.details.stdout.length > 100 ? '...' : ''}
+                            </span>
+                          </div>
+                        )}
+                        {log.details.stderr && (
+                          <div className="text-xs">
+                            <span className="text-red-400 font-semibold bg-red-500/20 px-2 py-1 rounded">✗ STDERR</span>
+                            <span className="ml-2 opacity-75">
+                              {log.details.stderr.slice(0, 100)}{log.details.stderr.length > 100 ? '...' : ''}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {renderExecutionOutput(log.details, isExpanded)}
+                      </div>
+                    )}
                   </div>
                   
-                  <p className="text-sm mb-2 opacity-90">
-                    {typeof log.details === 'string' ? log.details : 
-                     log.details?.scriptName ? `Script: ${log.details.scriptName}` :
-                     log.details?.command ? `Comando: ${log.details.command}` :
-                     log.details?.fileName ? `Arquivo: ${log.details.fileName}` :
-                     'Operação do sistema'}
-                  </p>
-
-                  {hasExecutionOutput(log.details) && (
-                    <div className="mt-2 space-y-1">
-                      {log.details.stdout && (
-                        <div className="text-xs">
-                          <span className="text-green-400 font-semibold">✓ STDOUT:</span>
-                          <span className="ml-2 opacity-75">
-                            {log.details.stdout.slice(0, 100)}{log.details.stdout.length > 100 ? '...' : ''}
-                          </span>
-                        </div>
-                      )}
-                      {log.details.stderr && (
-                        <div className="text-xs">
-                          <span className="text-red-400 font-semibold">✗ STDERR:</span>
-                          <span className="ml-2 opacity-75">
-                            {log.details.stderr.slice(0, 100)}{log.details.stderr.length > 100 ? '...' : ''}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="flex space-x-2 flex-shrink-0 ml-4">
+                    {hasOutput && (
+                      <Button
+                        onClick={() => toggleLogExpansion(index)}
+                        variant="outline"
+                        size="sm"
+                        className="border-current/30 hover:bg-current/10"
+                        title={isExpanded ? "Mostrar menos" : "Mostrar mais"}
+                      >
+                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                      </Button>
+                    )}
+                    <Button
+                      onClick={() => showLogDetails(log)}
+                      variant="outline"
+                      size="sm"
+                      className="border-current/30 hover:bg-current/10"
+                      title="Ver detalhes completos"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
-                
-                <Button
-                  onClick={() => showLogDetails(log)}
-                  variant="outline"
-                  size="sm"
-                  className="border-current/30 hover:bg-current/10 flex-shrink-0"
-                >
-                  <Eye className="w-4 h-4" />
-                </Button>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -253,12 +289,12 @@ const SystemLogs = () => {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="backend" className="flex items-center gap-2">
+        <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 border border-slate-600/30">
+          <TabsTrigger value="backend" className="flex items-center gap-2 data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">
             <Server className="w-4 h-4" />
             Backend
           </TabsTrigger>
-          <TabsTrigger value="frontend" className="flex items-center gap-2">
+          <TabsTrigger value="frontend" className="flex items-center gap-2 data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300">
             <MonitorSpeaker className="w-4 h-4" />
             Frontend
           </TabsTrigger>
@@ -298,7 +334,7 @@ const SystemLogs = () => {
                 </div>
               </div>
 
-              {renderExecutionOutput(selectedLog.details)}
+              {renderExecutionOutput(selectedLog.details, true)}
 
               <div className="bg-slate-900/50 p-4 rounded-lg">
                 <h4 className="text-slate-300 mb-2">Detalhes Completos:</h4>

@@ -1,8 +1,8 @@
 
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Calendar, Play } from 'lucide-react';
 
@@ -22,28 +22,29 @@ const DateSelector = () => {
       return;
     }
 
-    // Validar dia e mês
-    const day = parseInt(selectedDay);
-    const month = parseInt(selectedMonth);
-    
-    if (day < 1 || day > 31 || month < 1 || month > 12) {
-      toast({
-        title: "Data inválida",
-        description: "Por favor, insira um dia (1-31) e mês (1-12) válidos",
-        variant: "destructive"
-      });
-      return;
-    }
-
     const formattedDate = `${selectedDay.padStart(2, '0')}/${selectedMonth.padStart(2, '0')}`;
 
     setIsExecuting(true);
 
     try {
-      // Carregar variáveis fixas do sistema se existirem
+      // Carregar comandos vinculados ao botão data
+      const commands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
+      const dateCommands = commands.date || [];
+
+      if (dateCommands.length === 0) {
+        toast({
+          title: "Nenhum comando configurado",
+          description: "Configure comandos para o botão Data na seção Comandos",
+          variant: "destructive"
+        });
+        setIsExecuting(false);
+        return;
+      }
+
+      // Carregar variáveis fixas do sistema
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
       
-      const environment = {
+      const envVariables = {
         NEW_DATE: formattedDate,
         DATE: formattedDate,
         DAY: selectedDay.padStart(2, '0'),
@@ -51,44 +52,60 @@ const DateSelector = () => {
         ...systemVars.date
       };
 
-      const response = await fetch('http://localhost:3001/api/execute-command', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          command: 'bash /app/scripts/change_date.sh',
-          name: 'Aplicar Data',
-          description: `Alterar data para ${formattedDate}`,
-          environment
-        })
-      });
+      // Executar todos os comandos vinculados
+      let allSuccess = true;
+      for (const commandId of dateCommands) {
+        const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');
+        const command = allCommands.find((cmd: any) => cmd.id === commandId);
+        
+        if (command) {
+          const response = await fetch('http://localhost:3001/api/execute-command', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              command: command.command,
+              name: `Data: ${command.name}`,
+              description: `Alterar data para ${formattedDate} - ${command.description}`,
+              environment: envVariables
+            })
+          });
 
-      const result = await response.json();
-      
-      if (result.success) {
+          const result = await response.json();
+          
+          if (!result.success) {
+            allSuccess = false;
+            toast({
+              title: `Erro no comando: ${command.name}`,
+              description: result.error || "Falha na execução",
+              variant: "destructive"
+            });
+          }
+        }
+      }
+
+      if (allSuccess) {
         toast({
           title: "Data aplicada!",
           description: `Sistema configurado para ${formattedDate}`,
-        });
-      } else {
-        toast({
-          title: "Erro na execução",
-          description: result.error || "Falha ao aplicar data",
-          variant: "destructive"
         });
       }
     } catch (error) {
       console.error('Erro na execução:', error);
       toast({
         title: "Erro",
-        description: `Erro ao executar comando: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
+        description: `Erro ao executar comandos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         variant: "destructive"
       });
     } finally {
       setIsExecuting(false);
     }
   };
+
+  // Gerar arrays para dias e meses
+  const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const months = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
 
   return (
     <div className="space-y-6">
@@ -101,29 +118,33 @@ const DateSelector = () => {
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <Label htmlFor="day" className="text-slate-300">Dia</Label>
-            <Input
-              id="day"
-              type="number"
-              min="1"
-              max="31"
-              value={selectedDay}
-              onChange={(e) => setSelectedDay(e.target.value)}
-              placeholder="DD"
-              className="bg-slate-700/50 border-slate-600 text-white"
-            />
+            <Select value={selectedDay} onValueChange={setSelectedDay}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                <SelectValue placeholder="Selecione o dia" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 text-white max-h-60">
+                {days.map(day => (
+                  <SelectItem key={day} value={day} className="hover:bg-slate-700">
+                    {day}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-2">
             <Label htmlFor="month" className="text-slate-300">Mês</Label>
-            <Input
-              id="month"
-              type="number"
-              min="1"
-              max="12"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              placeholder="MM"
-              className="bg-slate-700/50 border-slate-600 text-white"
-            />
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+                <SelectValue placeholder="Selecione o mês" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 text-white">
+                {months.map(month => (
+                  <SelectItem key={month} value={month} className="hover:bg-slate-700">
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
@@ -144,7 +165,7 @@ const DateSelector = () => {
       {selectedDay && selectedMonth && (
         <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <p className="text-blue-300 text-sm">
-            <strong>Nova data:</strong> {selectedDay.padStart(2, '0')}/{selectedMonth.padStart(2, '0')}
+            <strong>Nova data:</strong> {selectedDay}/{selectedMonth}
           </p>
         </div>
       )}

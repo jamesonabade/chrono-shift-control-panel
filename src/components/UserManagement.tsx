@@ -18,6 +18,7 @@ interface User {
     commands: boolean;
     users: boolean;
     logs: boolean;
+    config: boolean;
   };
 }
 
@@ -32,7 +33,8 @@ const UserManagement = () => {
       scripts: false,
       commands: false,
       users: false,
-      logs: false
+      logs: false,
+      config: false
     }
   });
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -44,53 +46,65 @@ const UserManagement = () => {
   }, []);
 
   const loadUsers = () => {
-    const savedUsers = localStorage.getItem('registeredUsers');
+    // Carregar credenciais
+    const savedCredentials = localStorage.getItem('userCredentials');
     const savedPermissions = localStorage.getItem('userPermissions');
     
-    if (savedUsers && savedPermissions) {
-      const usersData = JSON.parse(savedUsers);
-      const permissionsData = JSON.parse(savedPermissions);
+    if (savedCredentials) {
+      const credentials = JSON.parse(savedCredentials);
+      const permissions = JSON.parse(savedPermissions || '{}');
       
       const combinedUsers: Record<string, User> = {};
-      Object.keys(usersData).forEach(username => {
-        if (username !== 'administrador') {
+      
+      // Incluir todos os usuários, incluindo administrador e usuario padrão
+      Object.keys(credentials).forEach(username => {
+        if (username === 'administrador') {
           combinedUsers[username] = {
             username,
-            password: usersData[username],
-            permissions: permissionsData[username] || {
+            password: credentials[username],
+            permissions: {
+              date: true,
+              database: true,
+              scripts: true,
+              commands: true,
+              users: true,
+              logs: true,
+              config: true
+            }
+          };
+        } else {
+          combinedUsers[username] = {
+            username,
+            password: credentials[username],
+            permissions: permissions[username] || {
               date: false,
               database: false,
               scripts: false,
               commands: false,
               users: false,
-              logs: false
+              logs: false,
+              config: false
             }
           };
         }
       });
       
       setUsers(combinedUsers);
-    } else {
-      // Inicializar com dados padrão se não existir
-      const defaultUsers = { administrador: 'admin123' };
-      const defaultPermissions = {};
-      
-      localStorage.setItem('registeredUsers', JSON.stringify(defaultUsers));
-      localStorage.setItem('userPermissions', JSON.stringify(defaultPermissions));
     }
   };
 
   const saveUsers = () => {
-    // Sempre manter o administrador
-    const usersData: Record<string, string> = { administrador: 'admin123' };
+    const usersData: Record<string, string> = {};
     const permissionsData: Record<string, any> = {};
     
     Object.values(users).forEach(user => {
       usersData[user.username] = user.password;
-      permissionsData[user.username] = user.permissions;
+      if (user.username !== 'administrador') {
+        permissionsData[user.username] = user.permissions;
+      }
     });
     
-    localStorage.setItem('registeredUsers', JSON.stringify(usersData));
+    localStorage.setItem('userCredentials', JSON.stringify(usersData));
     localStorage.setItem('userPermissions', JSON.stringify(permissionsData));
     
     toast({
@@ -109,7 +123,7 @@ const UserManagement = () => {
       return;
     }
 
-    if (users[newUser.username] || newUser.username === 'administrador') {
+    if (users[newUser.username]) {
       toast({
         title: "Erro",
         description: "Este usuário já existe",
@@ -132,7 +146,8 @@ const UserManagement = () => {
         scripts: false,
         commands: false,
         users: false,
-        logs: false
+        logs: false,
+        config: false
       }
     });
     
@@ -145,6 +160,15 @@ const UserManagement = () => {
   };
 
   const deleteUser = (username: string) => {
+    if (username === 'administrador') {
+      toast({
+        title: "Erro",
+        description: "Não é possível remover o administrador",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setUsers(prev => {
       const newUsers = { ...prev };
       delete newUsers[username];
@@ -158,6 +182,15 @@ const UserManagement = () => {
   };
 
   const updatePermission = (username: string, permission: keyof User['permissions'], value: boolean) => {
+    if (username === 'administrador') {
+      toast({
+        title: "Aviso",
+        description: "Permissões do administrador não podem ser alteradas",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setUsers(prev => ({
       ...prev,
       [username]: {
@@ -180,6 +213,19 @@ const UserManagement = () => {
     }));
   };
 
+  const getPermissionLabel = (key: string) => {
+    const labels: Record<string, string> = {
+      date: 'Data',
+      database: 'Banco',
+      scripts: 'Scripts',
+      commands: 'Comandos',
+      users: 'Usuários',
+      logs: 'Logs',
+      config: 'Configurações'
+    };
+    return labels[key] || key;
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -195,7 +241,7 @@ const UserManagement = () => {
               Novo Usuário
             </Button>
           </DialogTrigger>
-          <DialogContent className="bg-slate-800 border-emerald-500/30">
+          <DialogContent className="bg-slate-800 border-emerald-500/30 max-w-md">
             <DialogHeader>
               <DialogTitle className="text-emerald-400">Adicionar Novo Usuário</DialogTitle>
             </DialogHeader>
@@ -222,13 +268,7 @@ const UserManagement = () => {
                 <Label className="text-slate-300">Permissões</Label>
                 {Object.entries(newUser.permissions).map(([key, value]) => (
                   <div key={key} className="flex items-center justify-between">
-                    <span className="text-slate-400 capitalize">
-                      {key === 'commands' ? 'Comandos' : 
-                       key === 'users' ? 'Usuários' : 
-                       key === 'logs' ? 'Logs' : 
-                       key === 'scripts' ? 'Scripts' : 
-                       key === 'database' ? 'Banco' : 'Data'}
-                    </span>
+                    <span className="text-slate-400">{getPermissionLabel(key)}</span>
                     <Switch
                       checked={value}
                       onCheckedChange={(checked) => 
@@ -255,34 +295,45 @@ const UserManagement = () => {
         {Object.keys(users).length === 0 ? (
           <div className="text-center text-slate-400 py-8">
             <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
-            <p>Nenhum usuário cadastrado além do administrador</p>
+            <p>Nenhum usuário encontrado</p>
           </div>
         ) : (
           Object.entries(users).map(([username, user]) => (
             <div key={username} className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/30">
               <div className="flex items-center justify-between mb-4">
-                <h4 className="text-white font-semibold">{username}</h4>
+                <h4 className="text-white font-semibold">
+                  {username}
+                  {username === 'administrador' && (
+                    <span className="ml-2 text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded">
+                      Admin
+                    </span>
+                  )}
+                </h4>
                 <div className="flex space-x-2">
-                  <Button
-                    onClick={() => setEditingUser(editingUser === username ? null : username)}
-                    variant="outline"
-                    size="sm"
-                    className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    onClick={() => deleteUser(username)}
-                    variant="outline"
-                    size="sm"
-                    className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {username !== 'administrador' && (
+                    <>
+                      <Button
+                        onClick={() => setEditingUser(editingUser === username ? null : username)}
+                        variant="outline"
+                        size="sm"
+                        className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </Button>
+                      <Button
+                        onClick={() => deleteUser(username)}
+                        variant="outline"
+                        size="sm"
+                        className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
 
-              {editingUser === username && (
+              {editingUser === username && username !== 'administrador' && (
                 <div className="space-y-3 mb-4 p-3 bg-slate-700/30 rounded">
                   <div className="space-y-2">
                     <Label className="text-slate-300">Nova Senha</Label>
@@ -299,18 +350,13 @@ const UserManagement = () => {
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {Object.entries(user.permissions).map(([permission, hasPermission]) => (
                   <div key={permission} className="flex items-center justify-between p-2 bg-slate-700/30 rounded">
-                    <span className="text-slate-300 text-sm capitalize">
-                      {permission === 'commands' ? 'Comandos' : 
-                       permission === 'users' ? 'Usuários' : 
-                       permission === 'logs' ? 'Logs' : 
-                       permission === 'scripts' ? 'Scripts' : 
-                       permission === 'database' ? 'Banco' : 'Data'}
-                    </span>
+                    <span className="text-slate-300 text-sm">{getPermissionLabel(permission)}</span>
                     <Switch
                       checked={hasPermission}
                       onCheckedChange={(checked) => 
                         updatePermission(username, permission as keyof User['permissions'], checked)
                       }
+                      disabled={username === 'administrador'}
                     />
                   </div>
                 ))}
