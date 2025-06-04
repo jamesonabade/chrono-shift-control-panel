@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Calendar, Database, FileCode, FileText, Upload, Users, User, Power, Terminal, Settings } from 'lucide-react';
 import DateSelector from '@/components/DateSelector';
@@ -12,6 +13,7 @@ import DateTime from '@/components/DateTime';
 const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
   const [activeTab, setActiveTab] = useState('date');
   const [customLogo, setCustomLogo] = useState('');
+  const [logoSize, setLogoSize] = useState(48);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
 
   useEffect(() => {
@@ -33,6 +35,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         // Aplicar logo
         if (customizations.logo) {
           setCustomLogo(customizations.logo);
+          setLogoSize(customizations.logoSize || 48);
         }
 
         // Aplicar background com transparência
@@ -70,6 +73,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       // Fallback para localStorage
       const bgImage = localStorage.getItem('loginBackground');
       const logo = localStorage.getItem('loginLogo');
+      const size = parseInt(localStorage.getItem('logoSize') || '48');
       const opacity = parseFloat(localStorage.getItem('backgroundOpacity') || '0.5');
       
       if (bgImage) {
@@ -96,6 +100,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       
       if (logo) {
         setCustomLogo(logo);
+        setLogoSize(size);
       }
     }
   };
@@ -149,13 +154,20 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       <div className="w-64 bg-slate-800/90 backdrop-blur-sm border-r border-slate-700 flex flex-col relative z-10">
         <div className="p-4 border-b border-slate-700 flex flex-col space-y-2">
           {customLogo ? (
-            <img src={customLogo} alt="Logo" className="h-12 object-contain" />
+            <div className="flex items-center justify-center">
+              <img 
+                src={customLogo} 
+                alt="Logo" 
+                className="object-contain"
+                style={{ height: `${logoSize}px` }}
+              />
+            </div>
           ) : (
-            <div className="text-xl font-semibold text-purple-400">
+            <div className="text-xl font-semibold text-purple-400 text-center">
               Painel de Controle
             </div>
           )}
-          <DateTime className="text-xs" />
+          <DateTime className="text-xs text-center" />
         </div>
         
         <div className="p-4 space-y-2 flex-1">

@@ -25,8 +25,10 @@ const DatabaseRestore = () => {
 
     try {
       // Carregar comandos vinculados ao botão banco
-      const commands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
-      const databaseCommands = commands.database || [];
+      const buttonCommands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
+      const databaseCommands = buttonCommands.database || [];
+
+      console.log('Comandos vinculados ao botão banco:', databaseCommands);
 
       if (databaseCommands.length === 0) {
         toast({
@@ -40,12 +42,15 @@ const DatabaseRestore = () => {
 
       // Carregar variáveis fixas do sistema
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
+      console.log('Variáveis do sistema:', systemVars);
       
       const envVariables = {
         ENVIRONMENT: environment,
         ENV: environment,
-        ...systemVars.database
+        ...(systemVars.database || {})
       };
+
+      console.log('Variáveis de ambiente para execução:', envVariables);
 
       // Executar todos os comandos vinculados
       let allSuccess = true;
@@ -54,6 +59,8 @@ const DatabaseRestore = () => {
         const command = allCommands.find((cmd: any) => cmd.id === commandId);
         
         if (command) {
+          console.log('Executando comando:', command);
+          
           const response = await fetch('http://localhost:3001/api/execute-command', {
             method: 'POST',
             headers: {
@@ -68,6 +75,7 @@ const DatabaseRestore = () => {
           });
 
           const result = await response.json();
+          console.log('Resultado da execução:', result);
           
           if (!result.success) {
             allSuccess = false;
@@ -77,6 +85,8 @@ const DatabaseRestore = () => {
               variant: "destructive"
             });
           }
+        } else {
+          console.warn('Comando não encontrado:', commandId);
         }
       }
 
@@ -85,6 +95,23 @@ const DatabaseRestore = () => {
           title: "Banco restaurado!",
           description: `Restauração concluída no ambiente ${environment}`,
         });
+
+        // Log da ação
+        const logEntry = {
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          action: 'DATABASE_RESTORED',
+          details: {
+            environment: environment,
+            commandsExecuted: databaseCommands.length,
+            variables: envVariables
+          },
+          message: `Banco restaurado no ambiente: ${environment}`
+        };
+        
+        const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+        logs.push(logEntry);
+        localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
       }
     } catch (error) {
       console.error('Erro na execução:', error);
@@ -109,7 +136,7 @@ const DatabaseRestore = () => {
         <div className="space-y-2">
           <Label htmlFor="environment" className="text-slate-300">Ambiente</Label>
           <Select value={environment} onValueChange={setEnvironment}>
-            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
               <SelectValue placeholder="Selecione o ambiente" />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-600 text-white">
@@ -140,6 +167,10 @@ const DatabaseRestore = () => {
           </p>
         </div>
       )}
+
+      <div className="p-3 bg-slate-700/20 rounded text-xs text-slate-400">
+        <p><strong>Variáveis disponíveis:</strong> $ENVIRONMENT, $ENV + variáveis personalizadas</p>
+      </div>
     </div>
   );
 };

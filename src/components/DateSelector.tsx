@@ -28,8 +28,10 @@ const DateSelector = () => {
 
     try {
       // Carregar comandos vinculados ao botão data
-      const commands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
-      const dateCommands = commands.date || [];
+      const buttonCommands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
+      const dateCommands = buttonCommands.date || [];
+
+      console.log('Comandos vinculados ao botão data:', dateCommands);
 
       if (dateCommands.length === 0) {
         toast({
@@ -43,14 +45,17 @@ const DateSelector = () => {
 
       // Carregar variáveis fixas do sistema
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
+      console.log('Variáveis do sistema:', systemVars);
       
       const envVariables = {
         NEW_DATE: formattedDate,
         DATE: formattedDate,
         DAY: selectedDay.padStart(2, '0'),
         MONTH: selectedMonth.padStart(2, '0'),
-        ...systemVars.date
+        ...(systemVars.date || {})
       };
+
+      console.log('Variáveis de ambiente para execução:', envVariables);
 
       // Executar todos os comandos vinculados
       let allSuccess = true;
@@ -59,6 +64,8 @@ const DateSelector = () => {
         const command = allCommands.find((cmd: any) => cmd.id === commandId);
         
         if (command) {
+          console.log('Executando comando:', command);
+          
           const response = await fetch('http://localhost:3001/api/execute-command', {
             method: 'POST',
             headers: {
@@ -73,6 +80,7 @@ const DateSelector = () => {
           });
 
           const result = await response.json();
+          console.log('Resultado da execução:', result);
           
           if (!result.success) {
             allSuccess = false;
@@ -82,6 +90,8 @@ const DateSelector = () => {
               variant: "destructive"
             });
           }
+        } else {
+          console.warn('Comando não encontrado:', commandId);
         }
       }
 
@@ -90,6 +100,23 @@ const DateSelector = () => {
           title: "Data aplicada!",
           description: `Sistema configurado para ${formattedDate}`,
         });
+
+        // Log da ação
+        const logEntry = {
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          action: 'DATE_APPLIED',
+          details: {
+            date: formattedDate,
+            commandsExecuted: dateCommands.length,
+            variables: envVariables
+          },
+          message: `Data aplicada: ${formattedDate}`
+        };
+        
+        const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+        logs.push(logEntry);
+        localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
       }
     } catch (error) {
       console.error('Erro na execução:', error);
@@ -119,7 +146,7 @@ const DateSelector = () => {
           <div className="space-y-2">
             <Label htmlFor="day" className="text-slate-300">Dia</Label>
             <Select value={selectedDay} onValueChange={setSelectedDay}>
-              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
                 <SelectValue placeholder="Selecione o dia" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-600 text-white max-h-60">
@@ -134,7 +161,7 @@ const DateSelector = () => {
           <div className="space-y-2">
             <Label htmlFor="month" className="text-slate-300">Mês</Label>
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
                 <SelectValue placeholder="Selecione o mês" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-600 text-white">
@@ -169,6 +196,10 @@ const DateSelector = () => {
           </p>
         </div>
       )}
+
+      <div className="p-3 bg-slate-700/20 rounded text-xs text-slate-400">
+        <p><strong>Variáveis disponíveis:</strong> $NEW_DATE, $DATE, $DAY, $MONTH + variáveis personalizadas</p>
+      </div>
     </div>
   );
 };

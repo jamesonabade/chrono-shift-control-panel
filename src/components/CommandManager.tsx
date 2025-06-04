@@ -48,8 +48,8 @@ const CommandManager = () => {
         {
           id: '1',
           name: 'Aplicar Data',
-          command: 'bash /app/scripts/change_date.sh',
-          description: 'Executa script de alteração de data',
+          command: 'echo "Alterando data para $NEW_DATE"',
+          description: 'Comando para alteração de data do sistema',
           category: 'date',
           linkedToButton: true,
           createdAt: new Date().toISOString()
@@ -57,8 +57,8 @@ const CommandManager = () => {
         {
           id: '2',
           name: 'Restaurar Banco',
-          command: 'bash /app/scripts/restore_db.sh',
-          description: 'Executa script de restauração do banco',
+          command: 'echo "Restaurando banco no ambiente $ENVIRONMENT"',
+          description: 'Comando para restauração do banco de dados',
           category: 'database',
           linkedToButton: true,
           createdAt: new Date().toISOString()
@@ -66,12 +66,24 @@ const CommandManager = () => {
       ];
       setCommands(defaultCommands);
       localStorage.setItem('customCommands', JSON.stringify(defaultCommands));
+      
+      // Atualizar o sistema de botões vinculados
+      updateButtonCommands(defaultCommands);
     }
+  };
+
+  const updateButtonCommands = (commandList: Command[]) => {
+    const buttonCommands = {
+      date: commandList.filter(cmd => cmd.category === 'date' && cmd.linkedToButton).map(cmd => cmd.id),
+      database: commandList.filter(cmd => cmd.category === 'database' && cmd.linkedToButton).map(cmd => cmd.id)
+    };
+    localStorage.setItem('buttonCommands', JSON.stringify(buttonCommands));
   };
 
   const saveCommands = (updatedCommands: Command[]) => {
     setCommands(updatedCommands);
     localStorage.setItem('customCommands', JSON.stringify(updatedCommands));
+    updateButtonCommands(updatedCommands);
   };
 
   const addCommand = () => {
@@ -135,10 +147,6 @@ const CommandManager = () => {
     const updatedCommands = commands.map(cmd => {
       if (cmd.id === command.id) {
         return { ...cmd, linkedToButton: !cmd.linkedToButton };
-      }
-      // Se está vinculando este comando, desvincular outros da mesma categoria
-      if (cmd.category === command.category && !command.linkedToButton) {
-        return { ...cmd, linkedToButton: false };
       }
       return cmd;
     });
@@ -233,10 +241,10 @@ const CommandManager = () => {
               <SelectValue />
             </SelectTrigger>
             <SelectContent className="bg-slate-800 border-slate-600">
-              <SelectItem value="all" className="text-white">Todos</SelectItem>
-              <SelectItem value="date" className="text-white">Data/Hora</SelectItem>
-              <SelectItem value="database" className="text-white">Banco</SelectItem>
-              <SelectItem value="custom" className="text-white">Personalizados</SelectItem>
+              <SelectItem value="all" className="text-white hover:bg-slate-700">Todos</SelectItem>
+              <SelectItem value="date" className="text-white hover:bg-slate-700">Data/Hora</SelectItem>
+              <SelectItem value="database" className="text-white hover:bg-slate-700">Banco</SelectItem>
+              <SelectItem value="custom" className="text-white hover:bg-slate-700">Personalizados</SelectItem>
             </SelectContent>
           </Select>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
@@ -277,9 +285,9 @@ const CommandManager = () => {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent className="bg-slate-800 border-slate-600">
-                    <SelectItem value="custom" className="text-white">Personalizado</SelectItem>
-                    <SelectItem value="date" className="text-white">Data/Hora</SelectItem>
-                    <SelectItem value="database" className="text-white">Banco de Dados</SelectItem>
+                    <SelectItem value="custom" className="text-white hover:bg-slate-700">Personalizado</SelectItem>
+                    <SelectItem value="date" className="text-white hover:bg-slate-700">Data/Hora</SelectItem>
+                    <SelectItem value="database" className="text-white hover:bg-slate-700">Banco de Dados</SelectItem>
                   </SelectContent>
                 </Select>
                 <div className="flex items-center space-x-2">
@@ -426,9 +434,9 @@ const CommandManager = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-800 border-slate-600">
-                  <SelectItem value="custom" className="text-white">Personalizado</SelectItem>
-                  <SelectItem value="date" className="text-white">Data/Hora</SelectItem>
-                  <SelectItem value="database" className="text-white">Banco de Dados</SelectItem>
+                  <SelectItem value="custom" className="text-white hover:bg-slate-700">Personalizado</SelectItem>
+                  <SelectItem value="date" className="text-white hover:bg-slate-700">Data/Hora</SelectItem>
+                  <SelectItem value="database" className="text-white hover:bg-slate-700">Banco de Dados</SelectItem>
                 </SelectContent>
               </Select>
               <div className="flex items-center space-x-2">
@@ -459,6 +467,13 @@ const CommandManager = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+        <p className="text-blue-300 text-sm">
+          <strong>Dica:</strong> Para usar variáveis nos comandos, utilize a sintaxe $NOME_VARIAVEL. 
+          Exemplo: echo "Data: $NEW_DATE" ou mysql -u root -p$DB_PASSWORD
+        </p>
+      </div>
     </div>
   );
 };

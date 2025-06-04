@@ -16,6 +16,7 @@ const SystemConfiguration = () => {
   const [newVarKey, setNewVarKey] = useState('');
   const [newVarValue, setNewVarValue] = useState('');
   const [activeTab, setActiveTab] = useState('variables');
+  const [variableTab, setVariableTab] = useState('date');
   
   // Estados para personalização
   const [backgroundImage, setBackgroundImage] = useState('');
@@ -36,7 +37,14 @@ const SystemConfiguration = () => {
   const loadSystemVariables = () => {
     const saved = localStorage.getItem('systemVariables');
     if (saved) {
-      setSystemVariables(JSON.parse(saved));
+      try {
+        const parsed = JSON.parse(saved);
+        setSystemVariables(parsed);
+        console.log('Variáveis carregadas:', parsed);
+      } catch (error) {
+        console.error('Erro ao carregar variáveis:', error);
+        setSystemVariables({ date: {}, database: {} });
+      }
     }
   };
 
@@ -80,6 +88,7 @@ const SystemConfiguration = () => {
   const saveSystemVariables = async () => {
     try {
       localStorage.setItem('systemVariables', JSON.stringify(systemVariables));
+      console.log('Variáveis salvas:', systemVariables);
       
       // Tentar salvar no backend também
       try {
@@ -301,7 +310,7 @@ const SystemConfiguration = () => {
     if (!newVarKey.trim() || !newVarValue.trim()) {
       toast({
         title: "Erro",
-        description: "Chave e valor são obrigatórios",
+        description: "Nome e valor da variável são obrigatórios",
         variant: "destructive"
       });
       return;
@@ -311,7 +320,7 @@ const SystemConfiguration = () => {
       ...prev,
       [type]: {
         ...prev[type],
-        [newVarKey]: newVarValue
+        [newVarKey.trim()]: newVarValue.trim()
       }
     }));
 
@@ -320,7 +329,7 @@ const SystemConfiguration = () => {
     
     toast({
       title: "Variável adicionada!",
-      description: `${newVarKey} adicionada ao tipo ${type}`,
+      description: `${newVarKey} = ${newVarValue} adicionada ao tipo ${type === 'date' ? 'Data' : 'Banco'}`,
     });
   };
 
@@ -336,7 +345,7 @@ const SystemConfiguration = () => {
 
     toast({
       title: "Variável removida!",
-      description: `${key} removida do tipo ${type}`,
+      description: `${key} removida do tipo ${type === 'date' ? 'Data' : 'Banco'}`,
     });
   };
 
@@ -353,33 +362,42 @@ const SystemConfiguration = () => {
   const renderVariableEditor = (type: 'date' | 'database') => (
     <div className="space-y-4">
       <div className="bg-slate-800/50 p-4 rounded-lg border border-slate-600/30">
-        <h4 className="text-slate-300 mb-3 font-semibold">
-          Variáveis para {type === 'date' ? 'Data' : 'Banco de Dados'}
+        <h4 className="text-slate-300 mb-3 font-semibold flex items-center">
+          <Settings className="w-4 h-4 mr-2" />
+          Variáveis Fixas para {type === 'date' ? 'Comandos de Data' : 'Comandos de Banco'}
         </h4>
         
         <div className="space-y-3">
           {Object.entries(systemVariables[type]).map(([key, value]) => (
             <div key={key} className="flex gap-2 items-center">
-              <Input
-                value={key}
-                disabled
-                className="bg-slate-700/50 border-slate-600 text-white flex-1"
-                placeholder="Chave"
-              />
-              <Input
-                value={value}
-                onChange={(e) => updateVariable(type, key, e.target.value)}
-                className="bg-slate-700/50 border-slate-600 text-white flex-2"
-                placeholder="Valor"
-              />
-              <Button
-                onClick={() => removeVariable(type, key)}
-                variant="outline"
-                size="sm"
-                className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-              >
-                <Trash2 className="w-4 h-4" />
-              </Button>
+              <div className="flex-1">
+                <Label className="text-xs text-slate-400 mb-1 block">Nome da Variável</Label>
+                <Input
+                  value={key}
+                  disabled
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                  placeholder="Nome"
+                />
+              </div>
+              <div className="flex-2">
+                <Label className="text-xs text-slate-400 mb-1 block">Valor</Label>
+                <Input
+                  value={value}
+                  onChange={(e) => updateVariable(type, key, e.target.value)}
+                  className="bg-slate-700/50 border-slate-600 text-white"
+                  placeholder="Valor"
+                />
+              </div>
+              <div className="pt-5">
+                <Button
+                  onClick={() => removeVariable(type, key)}
+                  variant="outline"
+                  size="sm"
+                  className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
             </div>
           ))}
         </div>
@@ -390,13 +408,13 @@ const SystemConfiguration = () => {
             <Input
               value={newVarKey}
               onChange={(e) => setNewVarKey(e.target.value)}
-              placeholder="Nome da variável"
+              placeholder="Nome da variável (ex: SERVER_URL)"
               className="bg-slate-700/50 border-slate-600 text-white"
             />
             <Input
               value={newVarValue}
               onChange={(e) => setNewVarValue(e.target.value)}
-              placeholder="Valor da variável"
+              placeholder="Valor da variável (ex: http://localhost:8080)"
               className="bg-slate-700/50 border-slate-600 text-white"
             />
             <Button
@@ -411,8 +429,12 @@ const SystemConfiguration = () => {
 
         <div className="mt-4 p-3 bg-slate-700/20 rounded">
           <p className="text-sm text-slate-400">
-            <strong>Info:</strong> Essas variáveis serão automaticamente incluídas quando os botões 
-            {type === 'date' ? ' "Aplicar Data"' : ' "Restaurar Banco"'} forem executados.
+            <strong>Como usar:</strong> Essas variáveis serão incluídas automaticamente quando os botões 
+            {type === 'date' ? ' "Aplicar Data"' : ' "Restaurar Banco"'} forem executados. 
+            Use a sintaxe <code className="bg-slate-600 px-1 rounded">$NOME_VARIAVEL</code> nos seus comandos.
+          </p>
+          <p className="text-xs text-slate-500 mt-2">
+            Exemplo: {type === 'date' ? 'echo "Alterando data para $NEW_DATE no servidor $SERVER_URL"' : 'mysqldump -h $DB_HOST -u $DB_USER database_name'}
           </p>
         </div>
       </div>
@@ -428,15 +450,35 @@ const SystemConfiguration = () => {
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-2 bg-slate-800/50 border border-slate-600/30">
-          <TabsTrigger value="variables" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300">Variáveis do Sistema</TabsTrigger>
-          <TabsTrigger value="appearance" className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300">Aparência</TabsTrigger>
+          <TabsTrigger 
+            value="variables" 
+            className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-300 hover:bg-slate-700/50"
+          >
+            Variáveis do Sistema
+          </TabsTrigger>
+          <TabsTrigger 
+            value="appearance" 
+            className="data-[state=active]:bg-cyan-500/20 data-[state=active]:text-cyan-300 hover:bg-slate-700/50"
+          >
+            Aparência
+          </TabsTrigger>
         </TabsList>
         
         <TabsContent value="variables" className="space-y-4">
-          <Tabs defaultValue="date" className="w-full">
+          <Tabs value={variableTab} onValueChange={setVariableTab} className="w-full">
             <TabsList className="grid w-full grid-cols-2 bg-slate-700/50">
-              <TabsTrigger value="date" className="data-[state=active]:bg-blue-500/20">Variáveis de Data</TabsTrigger>
-              <TabsTrigger value="database" className="data-[state=active]:bg-green-500/20">Variáveis de Banco</TabsTrigger>
+              <TabsTrigger 
+                value="date" 
+                className="data-[state=active]:bg-blue-500/20 hover:bg-slate-600/50"
+              >
+                Variáveis de Data
+              </TabsTrigger>
+              <TabsTrigger 
+                value="database" 
+                className="data-[state=active]:bg-green-500/20 hover:bg-slate-600/50"
+              >
+                Variáveis de Banco
+              </TabsTrigger>
             </TabsList>
             
             <TabsContent value="date" className="space-y-4">
@@ -453,7 +495,7 @@ const SystemConfiguration = () => {
             className="w-full bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white font-semibold py-3"
           >
             <Save className="w-5 h-5 mr-2" />
-            Salvar Variáveis
+            Salvar Todas as Variáveis
           </Button>
 
           <div className="p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
