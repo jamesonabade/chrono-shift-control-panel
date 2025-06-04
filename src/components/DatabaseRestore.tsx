@@ -11,6 +11,12 @@ const DatabaseRestore = () => {
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
+  // Carregar último estado salvo
+  useEffect(() => {
+    const savedEnvironment = localStorage.getItem('lastSelectedEnvironment');
+    if (savedEnvironment) setEnvironment(savedEnvironment);
+  }, []);
+
   const executeCommand = async () => {
     if (!environment) {
       toast({
@@ -91,6 +97,9 @@ const DatabaseRestore = () => {
       }
 
       if (allSuccess) {
+        // Salvar último estado aplicado
+        localStorage.setItem('lastSelectedEnvironment', environment);
+        
         toast({
           title: "Banco restaurado!",
           description: `Restauração concluída no ambiente ${environment}`,

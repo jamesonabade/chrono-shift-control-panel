@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -11,6 +10,14 @@ const DateSelector = () => {
   const [selectedMonth, setSelectedMonth] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
+
+  // Carregar último estado salvo
+  useEffect(() => {
+    const savedDay = localStorage.getItem('lastSelectedDay');
+    const savedMonth = localStorage.getItem('lastSelectedMonth');
+    if (savedDay) setSelectedDay(savedDay);
+    if (savedMonth) setSelectedMonth(savedMonth);
+  }, []);
 
   const executeCommand = async () => {
     if (!selectedDay || !selectedMonth) {
@@ -96,10 +103,30 @@ const DateSelector = () => {
       }
 
       if (allSuccess) {
+        // Salvar último estado aplicado
+        localStorage.setItem('lastSelectedDay', selectedDay);
+        localStorage.setItem('lastSelectedMonth', selectedMonth);
+        
         toast({
           title: "Data aplicada!",
           description: `Sistema configurado para ${formattedDate}`,
         });
+
+        // Sincronizar horário com servidor
+        try {
+          const response = await fetch('http://localhost:3001/api/server-time');
+          if (response.ok) {
+            const { serverTime } = await response.json();
+            console.log('Horário do servidor após alteração:', serverTime);
+            
+            // Disparar evento para atualizar DateTime
+            window.dispatchEvent(new CustomEvent('dateChanged', { 
+              detail: { newDate: formattedDate, serverTime } 
+            }));
+          }
+        } catch (error) {
+          console.warn('Não foi possível sincronizar com o servidor:', error);
+        }
 
         // Log da ação
         const logEntry = {
