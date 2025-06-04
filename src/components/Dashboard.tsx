@@ -23,11 +23,47 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
     // Aplicar personalizações globais
     applyGlobalCustomizations();
+    
+    // Observar mudanças na transparência do localStorage
+    const handleStorageChange = () => {
+      const savedOpacity = localStorage.getItem('backgroundOpacity');
+      if (savedOpacity) {
+        const opacity = parseFloat(savedOpacity);
+        setBackgroundOpacity(opacity);
+        applyBackgroundOpacity(opacity);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
   }, [onLogout]);
+
+  const applyBackgroundOpacity = (opacity: number) => {
+    const dashboardElement = document.getElementById('dashboard-main');
+    if (dashboardElement) {
+      dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+      dashboardElement.style.backdropFilter = 'blur(2px)';
+    }
+  };
 
   const applyGlobalCustomizations = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/customizations');
+      // Detectar URL do servidor baseado no ambiente
+      let serverUrl = 'http://localhost:3001';
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+        
+        // Se não estiver em localhost, usar o protocolo atual
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+          serverUrl = `${protocol}//${hostname}`;
+        }
+      }
+      
+      const response = await fetch(`${serverUrl}/api/customizations`);
       if (response.ok) {
         const customizations = await response.json();
         
@@ -39,7 +75,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
         // Aplicar background com transparência configurável
         if (customizations.background) {
-          const opacity = customizations.backgroundOpacity || 0.5;
+          const opacity = customizations.backgroundOpacity !== undefined ? customizations.backgroundOpacity : 0.5;
           setBackgroundOpacity(opacity);
           
           // Aplicar fundo na body
@@ -49,12 +85,8 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
           document.body.style.backgroundAttachment = 'fixed';
           document.body.style.backgroundRepeat = 'no-repeat';
           
-          // Criar overlay de transparência no dashboard
-          const dashboardElement = document.getElementById('dashboard-main');
-          if (dashboardElement) {
-            dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
-            dashboardElement.style.backdropFilter = 'blur(2px)';
-          }
+          // Aplicar transparência no dashboard
+          applyBackgroundOpacity(opacity);
         }
 
         // Aplicar título
@@ -78,11 +110,8 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         document.body.style.backgroundAttachment = 'fixed';
         document.body.style.backgroundRepeat = 'no-repeat';
         
-        const dashboardElement = document.getElementById('dashboard-main');
-        if (dashboardElement) {
-          dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
-          dashboardElement.style.backdropFilter = 'blur(2px)';
-        }
+        // Aplicar transparência
+        applyBackgroundOpacity(opacity);
       }
       
       if (logo) {

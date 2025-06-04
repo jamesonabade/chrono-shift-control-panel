@@ -17,7 +17,25 @@ const SystemConfiguration = () => {
   const [databaseVariables, setDatabaseVariables] = useState<Record<string, string>>({});
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
   const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  const [serverUrl, setServerUrl] = useState('http://localhost:3001');
+  
+  // Detectar URL do servidor baseado no ambiente
+  const getServerUrl = () => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const protocol = window.location.protocol;
+      
+      // Se estiver em localhost ou 127.0.0.1, usar porta 3001
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        return 'http://localhost:3001';
+      }
+      
+      // Para outros domínios, usar o protocolo atual
+      return `${protocol}//${hostname}`;
+    }
+    return 'http://localhost:3001';
+  };
+  
+  const [serverUrl] = useState(getServerUrl());
   
   const { toast } = useToast();
 
@@ -32,21 +50,46 @@ const SystemConfiguration = () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
+      // Testar endpoint específico de saúde
       const response = await fetch(`${serverUrl}/api/health`, { 
         method: 'GET',
-        signal: controller.signal
+        signal: controller.signal,
+        headers: {
+          'Content-Type': 'application/json',
+        }
       });
       
       clearTimeout(timeoutId);
       
       if (response.ok) {
         setServerStatus('online');
+        console.log('Servidor detectado como online:', serverUrl);
       } else {
-        setServerStatus('offline');
+        throw new Error(`Status: ${response.status}`);
       }
     } catch (error) {
       setServerStatus('offline');
       console.error('Erro ao verificar status do servidor:', error);
+      
+      // Tentar endpoint alternativo de customizações
+      try {
+        const controller2 = new AbortController();
+        const timeoutId2 = setTimeout(() => controller2.abort(), 3000);
+        
+        const fallbackResponse = await fetch(`${serverUrl}/api/customizations`, {
+          method: 'GET',
+          signal: controller2.signal
+        });
+        
+        clearTimeout(timeoutId2);
+        
+        if (fallbackResponse.ok) {
+          setServerStatus('online');
+          console.log('Servidor detectado via endpoint customizations:', serverUrl);
+        }
+      } catch (fallbackError) {
+        console.error('Fallback também falhou:', fallbackError);
+      }
     }
   };
 
@@ -60,14 +103,14 @@ const SystemConfiguration = () => {
         setLogoImage(data.logo || '');
         setSystemTitle(data.title || 'Painel de Controle');
         setLogoSize(data.logoSize || 48);
-        setBackgroundOpacity(data.backgroundOpacity || 0.5);
+        setBackgroundOpacity(data.backgroundOpacity !== undefined ? data.backgroundOpacity : 0.5);
         setServerStatus('online');
+        console.log('Configurações carregadas do servidor');
       } else {
         throw new Error('Servidor indisponível');
       }
     } catch (error) {
       console.error('Erro ao carregar configurações do servidor:', error);
-      setServerStatus('offline');
       
       // Fallback para localStorage
       const savedBg = localStorage.getItem('loginBackground');
@@ -99,11 +142,51 @@ const SystemConfiguration = () => {
       if (savedDatabaseVars) {
         setDatabaseVariables(JSON.parse(savedDatabaseVars));
       }
+      
+      console.log('Configurações carregadas do localStorage (fallback)');
     }
   };
 
-  const saveAppearanceSettings = async () => {
-    const settings = {
+  // Função para upload de imagens
+  const handleImageUpload = async (file: File, type: 'background' | 'logo') => {
+    if (!file.type.startsWith('image/')) {
+      toast({
+        title: "Erro",
+        description: "Por favor, selecione um arquivo de imagem",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const result = e.target?.result as string;
+      
+      if (type === 'background') {
+        setBackgroundImage(result);
+        await saveAppearanceSettings({
+          background: result,
+          logo: logoImage,
+          title: systemTitle,
+          logoSize: logoSize,
+          backgroundOpacity: backgroundOpacity
+        });
+      } else if (type === 'logo') {
+        setLogoImage(result);
+        await saveAppearanceSettings({
+          background: backgroundImage,
+          logo: result,
+          title: systemTitle,
+          logoSize: logoSize,
+          backgroundOpacity: backgroundOpacity
+        });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveAppearanceSettings = async (settings?: any) => {
+    const settingsToSave = settings || {
       background: backgroundImage,
       logo: logoImage,
       title: systemTitle,
@@ -118,7 +201,7 @@ const SystemConfiguration = () => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(settings)
+        body: JSON.stringify(settingsToSave)
       });
 
       if (response.ok) {
@@ -127,6 +210,10 @@ const SystemConfiguration = () => {
           description: "Personalizações aplicadas com sucesso no servidor",
         });
         setServerStatus('online');
+        
+        // Aplicar configurações imediatamente
+        applyBackgroundSettings(settingsToSave);
+        
       } else {
         throw new Error(`Erro do servidor: ${response.status}`);
       }
@@ -135,18 +222,65 @@ const SystemConfiguration = () => {
       setServerStatus('offline');
       
       // Salvar localmente como fallback
-      localStorage.setItem('loginBackground', backgroundImage);
-      localStorage.setItem('loginLogo', logoImage);
-      localStorage.setItem('loginTitle', systemTitle);
-      localStorage.setItem('logoSize', logoSize.toString());
-      localStorage.setItem('backgroundOpacity', backgroundOpacity.toString());
+      localStorage.setItem('loginBackground', settingsToSave.background);
+      localStorage.setItem('loginLogo', settingsToSave.logo);
+      localStorage.setItem('loginTitle', settingsToSave.title);
+      localStorage.setItem('logoSize', settingsToSave.logoSize.toString());
+      localStorage.setItem('backgroundOpacity', settingsToSave.backgroundOpacity.toString());
+      
+      // Aplicar configurações imediatamente
+      applyBackgroundSettings(settingsToSave);
       
       toast({
         title: "Dados salvos localmente",
-        description: `Servidor indisponível (tentativa: ${serverUrl}/api/customizations), salvo apenas neste navegador`,
+        description: `Servidor indisponível (${serverUrl}/api/customizations), salvo apenas neste navegador`,
         variant: "destructive"
       });
     }
+  };
+
+  // Aplicar configurações de background dinamicamente
+  const applyBackgroundSettings = (settings: any) => {
+    if (settings.background) {
+      document.body.style.backgroundImage = `url(${settings.background})`;
+      document.body.style.backgroundSize = 'cover';
+      document.body.style.backgroundPosition = 'center';
+      document.body.style.backgroundAttachment = 'fixed';
+      document.body.style.backgroundRepeat = 'no-repeat';
+      
+      // Aplicar transparência no dashboard
+      const dashboardElement = document.getElementById('dashboard-main');
+      if (dashboardElement) {
+        dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - settings.backgroundOpacity})`;
+        dashboardElement.style.backdropFilter = 'blur(2px)';
+      }
+    }
+
+    if (settings.title) {
+      document.title = settings.title;
+    }
+  };
+
+  // Função para alterar transparência dinamicamente
+  const handleOpacityChange = async (value: number[]) => {
+    const newOpacity = value[0];
+    setBackgroundOpacity(newOpacity);
+    
+    // Aplicar imediatamente
+    const dashboardElement = document.getElementById('dashboard-main');
+    if (dashboardElement) {
+      dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - newOpacity})`;
+      dashboardElement.style.backdropFilter = 'blur(2px)';
+    }
+    
+    // Salvar
+    await saveAppearanceSettings({
+      background: backgroundImage,
+      logo: logoImage,
+      title: systemTitle,
+      logoSize: logoSize,
+      backgroundOpacity: newOpacity
+    });
   };
 
   const downloadBackgroundImage = () => {
@@ -267,6 +401,14 @@ const SystemConfiguration = () => {
              serverStatus === 'offline' ? 'Offline' : 'Verificando...'}
           </span>
           <span className="text-slate-400 text-xs">{serverUrl}</span>
+          <Button 
+            onClick={checkServerStatus}
+            variant="outline"
+            size="sm"
+            className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
+          >
+            Testar
+          </Button>
         </div>
       </div>
 
@@ -309,22 +451,43 @@ const SystemConfiguration = () => {
             <div className="space-y-6">
               <div className="space-y-4">
                 <Label className="text-slate-300">Imagem de Fundo</Label>
-                <div className="flex space-x-2">
-                  <Input
-                    value={backgroundImage}
-                    onChange={(e) => setBackgroundImage(e.target.value)}
-                    placeholder="URL da imagem de fundo"
-                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
-                  />
-                  <Button 
-                    onClick={downloadBackgroundImage}
-                    disabled={!backgroundImage}
-                    variant="outline"
-                    size="sm"
-                    className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex space-x-2">
+                    <Input
+                      value={backgroundImage}
+                      onChange={(e) => setBackgroundImage(e.target.value)}
+                      placeholder="URL da imagem de fundo"
+                      className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                    />
+                    <Button 
+                      onClick={downloadBackgroundImage}
+                      disabled={!backgroundImage}
+                      variant="outline"
+                      size="sm"
+                      className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Upload de arquivo de imagem */}
+                  <div className="flex space-x-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, 'background');
+                      }}
+                      className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                      disabled={serverStatus === 'offline'}
+                    />
+                    <Upload className="w-4 h-4 text-slate-400 mt-2" />
+                  </div>
+                  
+                  {serverStatus === 'offline' && (
+                    <p className="text-xs text-red-400">Upload disponível apenas com servidor online</p>
+                  )}
                 </div>
                 {backgroundImage && (
                   <div className="w-32 h-20 bg-cover bg-center rounded border border-slate-600" 
@@ -337,7 +500,7 @@ const SystemConfiguration = () => {
                 <div className="space-y-2">
                   <Slider
                     value={[backgroundOpacity]}
-                    onValueChange={(value) => setBackgroundOpacity(value[0])}
+                    onValueChange={handleOpacityChange}
                     min={0}
                     max={1}
                     step={0.1}
@@ -353,22 +516,43 @@ const SystemConfiguration = () => {
 
               <div className="space-y-4">
                 <Label className="text-slate-300">Logo do Sistema</Label>
-                <div className="flex space-x-2">
-                  <Input
-                    value={logoImage}
-                    onChange={(e) => setLogoImage(e.target.value)}
-                    placeholder="URL do logo"
-                    className="bg-slate-700/50 border-slate-600 text-white flex-1"
-                  />
-                  <Button 
-                    onClick={downloadLogoImage}
-                    disabled={!logoImage}
-                    variant="outline"
-                    size="sm"
-                    className="border-green-500/50 text-green-400 hover:bg-green-500/20"
-                  >
-                    <Download className="w-4 h-4" />
-                  </Button>
+                <div className="space-y-2">
+                  <div className="flex space-x-2">
+                    <Input
+                      value={logoImage}
+                      onChange={(e) => setLogoImage(e.target.value)}
+                      placeholder="URL do logo"
+                      className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                    />
+                    <Button 
+                      onClick={downloadLogoImage}
+                      disabled={!logoImage}
+                      variant="outline"
+                      size="sm"
+                      className="border-green-500/50 text-green-400 hover:bg-green-500/20"
+                    >
+                      <Download className="w-4 h-4" />
+                    </Button>
+                  </div>
+                  
+                  {/* Upload de arquivo de logo */}
+                  <div className="flex space-x-2">
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleImageUpload(file, 'logo');
+                      }}
+                      className="bg-slate-700/50 border-slate-600 text-white flex-1"
+                      disabled={serverStatus === 'offline'}
+                    />
+                    <Upload className="w-4 h-4 text-slate-400 mt-2" />
+                  </div>
+                  
+                  {serverStatus === 'offline' && (
+                    <p className="text-xs text-red-400">Upload disponível apenas com servidor online</p>
+                  )}
                 </div>
                 {logoImage && (
                   <img src={logoImage} alt="Logo" className="w-16 h-16 object-contain rounded border border-slate-600" />
@@ -380,7 +564,16 @@ const SystemConfiguration = () => {
                 <div className="space-y-2">
                   <Slider
                     value={[logoSize]}
-                    onValueChange={(value) => setLogoSize(value[0])}
+                    onValueChange={(value) => {
+                      setLogoSize(value[0]);
+                      saveAppearanceSettings({
+                        background: backgroundImage,
+                        logo: logoImage,
+                        title: systemTitle,
+                        logoSize: value[0],
+                        backgroundOpacity: backgroundOpacity
+                      });
+                    }}
                     min={24}
                     max={200}
                     step={4}
@@ -404,7 +597,7 @@ const SystemConfiguration = () => {
                 />
               </div>
 
-              <Button onClick={saveAppearanceSettings} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
+              <Button onClick={() => saveAppearanceSettings()} className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600">
                 Salvar Aparência
               </Button>
             </div>
