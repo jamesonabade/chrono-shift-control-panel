@@ -8,13 +8,15 @@ import SystemLogs from '@/components/SystemLogs';
 import CommandManager from '@/components/CommandManager';
 import SystemConfiguration from '@/components/SystemConfiguration';
 import DateTime from '@/components/DateTime';
-
-const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
+const Dashboard = ({
+  onLogout
+}: {
+  onLogout: () => void;
+}) => {
   const [activeTab, setActiveTab] = useState('date');
   const [customLogo, setCustomLogo] = useState('');
   const [logoSize, setLogoSize] = useState(48);
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
-
   useEffect(() => {
     const authStatus = localStorage.getItem('isAuthenticated');
     if (authStatus !== 'true') {
@@ -23,7 +25,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
 
     // Aplicar personalizações globais
     applyGlobalCustomizations();
-    
+
     // Observar mudanças na transparência do localStorage
     const handleStorageChange = () => {
       const savedOpacity = localStorage.getItem('backgroundOpacity');
@@ -33,14 +35,11 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         applyBackgroundOpacity(opacity);
       }
     };
-
     window.addEventListener('storage', handleStorageChange);
-    
     return () => {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [onLogout]);
-
   const applyBackgroundOpacity = (opacity: number) => {
     const dashboardElement = document.getElementById('dashboard-main');
     if (dashboardElement) {
@@ -48,7 +47,6 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       dashboardElement.style.backdropFilter = 'blur(2px)';
     }
   };
-
   const applyGlobalCustomizations = async () => {
     try {
       // Detectar URL do servidor baseado no ambiente
@@ -56,17 +54,16 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       if (typeof window !== 'undefined') {
         const hostname = window.location.hostname;
         const protocol = window.location.protocol;
-        
+
         // Se não estiver em localhost, usar o protocolo atual
         if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
           serverUrl = `${protocol}//${hostname}`;
         }
       }
-      
       const response = await fetch(`${serverUrl}/api/customizations`);
       if (response.ok) {
         const customizations = await response.json();
-        
+
         // Aplicar logo
         if (customizations.logo) {
           setCustomLogo(customizations.logo);
@@ -77,14 +74,14 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         if (customizations.background) {
           const opacity = customizations.backgroundOpacity !== undefined ? customizations.backgroundOpacity : 0.5;
           setBackgroundOpacity(opacity);
-          
+
           // Aplicar fundo na body
           document.body.style.backgroundImage = `url(${customizations.background})`;
           document.body.style.backgroundSize = 'cover';
           document.body.style.backgroundPosition = 'center';
           document.body.style.backgroundAttachment = 'fixed';
           document.body.style.backgroundRepeat = 'no-repeat';
-          
+
           // Aplicar transparência no dashboard
           applyBackgroundOpacity(opacity);
         }
@@ -101,7 +98,6 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       const logo = localStorage.getItem('loginLogo');
       const size = parseInt(localStorage.getItem('logoSize') || '48');
       const opacity = parseFloat(localStorage.getItem('backgroundOpacity') || '0.5');
-      
       if (bgImage) {
         setBackgroundOpacity(opacity);
         document.body.style.backgroundImage = `url(${bgImage})`;
@@ -109,21 +105,18 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         document.body.style.backgroundPosition = 'center';
         document.body.style.backgroundAttachment = 'fixed';
         document.body.style.backgroundRepeat = 'no-repeat';
-        
+
         // Aplicar transparência
         applyBackgroundOpacity(opacity);
       }
-      
       if (logo) {
         setCustomLogo(logo);
         setLogoSize(size);
       }
     }
   };
-
   const currentUser = localStorage.getItem('currentUser');
   const isAdmin = currentUser === 'administrador';
-  
   const getUserPermissions = () => {
     if (isAdmin) {
       return {
@@ -136,13 +129,10 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         config: true
       };
     }
-    
     const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
     return userPermissions[currentUser || ''] || {};
   };
-
   const permissions = getUserPermissions();
-
   const renderContent = () => {
     switch (activeTab) {
       case 'date':
@@ -163,130 +153,58 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
         return <DateSelector />;
     }
   };
-
-  return (
-    <div id="dashboard-main" className="flex h-screen text-white relative" style={{ 
-      backgroundColor: `rgba(15, 23, 42, ${1 - backgroundOpacity})`,
-      backdropFilter: 'blur(2px)'
-    }}>
+  return <div id="dashboard-main" className="flex h-screen text-white relative" style={{
+    backgroundColor: `rgba(15, 23, 42, ${1 - backgroundOpacity})`,
+    backdropFilter: 'blur(2px)'
+  }}>
       {/* Sidebar */}
       <div className="w-64 bg-slate-800/70 backdrop-blur-sm border-r border-slate-700/50 flex flex-col relative z-10">
         <div className="p-4 border-b border-slate-700/50 flex flex-col space-y-2">
-          {customLogo ? (
-            <div className="flex items-center justify-center">
-              <img 
-                src={customLogo} 
-                alt="Logo" 
-                className="object-contain"
-                style={{ height: `${logoSize}px` }}
-              />
-            </div>
-          ) : (
-            <div className="text-xl font-semibold text-purple-400 text-center">
+          {customLogo ? <div className="flex items-center justify-center">
+              <img src={customLogo} alt="Logo" className="object-contain" style={{
+            height: `${logoSize}px`
+          }} />
+            </div> : <div className="text-xl font-semibold text-white text-center">
               Painel de Controle
-            </div>
-          )}
+            </div>}
           <DateTime className="text-xs text-center" />
         </div>
         
         <div className="p-4 space-y-2 flex-1">
-          {permissions.date && (
-            <button
-              onClick={() => setActiveTab('date')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'date'
-                  ? 'bg-blue-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.date && <button onClick={() => setActiveTab('date')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'date' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <Calendar className="w-4 h-4 mr-2 inline" />
               Data
-            </button>
-          )}
+            </button>}
           
-          {permissions.database && (
-            <button
-              onClick={() => setActiveTab('database')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'database'
-                  ? 'bg-green-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.database && <button onClick={() => setActiveTab('database')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'database' ? 'bg-green-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <Database className="w-4 h-4 mr-2 inline" />
               Banco
-            </button>
-          )}
+            </button>}
           
-          {permissions.scripts && (
-            <button
-              onClick={() => setActiveTab('scripts')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'scripts'
-                  ? 'bg-purple-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.scripts && <button onClick={() => setActiveTab('scripts')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'scripts' ? 'bg-purple-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <Upload className="w-4 h-4 mr-2 inline" />
               Scripts
-            </button>
-          )}
+            </button>}
 
-          {permissions.commands && (
-            <button
-              onClick={() => setActiveTab('commands')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'commands'
-                  ? 'bg-yellow-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.commands && <button onClick={() => setActiveTab('commands')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'commands' ? 'bg-yellow-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <Terminal className="w-4 h-4 mr-2 inline" />
               Comandos
-            </button>
-          )}
+            </button>}
           
-          {permissions.users && (
-            <button
-              onClick={() => setActiveTab('users')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'users'
-                  ? 'bg-emerald-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.users && <button onClick={() => setActiveTab('users')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'users' ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <Users className="w-4 h-4 mr-2 inline" />
               Usuários
-            </button>
-          )}
+            </button>}
           
-          {permissions.logs && (
-            <button
-              onClick={() => setActiveTab('logs')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'logs'
-                  ? 'bg-cyan-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.logs && <button onClick={() => setActiveTab('logs')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'logs' ? 'bg-cyan-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <FileText className="w-4 h-4 mr-2 inline" />
               Logs
-            </button>
-          )}
+            </button>}
 
-          {permissions.config && (
-            <button
-              onClick={() => setActiveTab('config')}
-              className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${
-                activeTab === 'config'
-                  ? 'bg-orange-500 text-white'
-                  : 'text-slate-300 hover:text-white hover:bg-slate-700'
-              }`}
-            >
+          {permissions.config && <button onClick={() => setActiveTab('config')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'config' ? 'bg-orange-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
               <Settings className="w-4 h-4 mr-2 inline" />
               Configurações
-            </button>
-          )}
+            </button>}
         </div>
         
         <div className="p-4 border-t border-slate-700/50">
@@ -294,10 +212,7 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
             <User className="w-4 h-4" />
             <span>{currentUser}</span>
           </div>
-          <button
-            onClick={onLogout}
-            className="w-full px-4 py-2 rounded-lg font-medium bg-red-600/80 hover:bg-red-700/80 text-white transition-colors backdrop-blur-sm"
-          >
+          <button onClick={onLogout} className="w-full px-4 py-2 rounded-lg font-medium bg-red-600/80 hover:bg-red-700/80 text-white transition-colors backdrop-blur-sm">
             <Power className="w-4 h-4 mr-2 inline" />
             Sair
           </button>
@@ -308,8 +223,6 @@ const Dashboard = ({ onLogout }: { onLogout: () => void }) => {
       <div className="flex-1 p-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
         {renderContent()}
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Dashboard;
