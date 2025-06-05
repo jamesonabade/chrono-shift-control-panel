@@ -12,8 +12,15 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
     
+    // Em desenvolvimento local (Lovable)
+    if (hostname.includes('lovableproject.com')) {
+      // No Lovable, não há backend real
+      return null;
+    }
+    
     // Em desenvolvimento local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      // Se estivermos na porta 8080, assumir que backend está em 3001
       if (window.location.port === '8080') {
         return 'http://localhost:3001';
       }
@@ -22,23 +29,32 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
     // Em Docker ou produção
     const basePath = import.meta.env.VITE_BASE_PATH || '';
     if (basePath && basePath !== '/') {
-      return `${protocol}//${hostname}${basePath}/api`;
+      return `${protocol}//${hostname}${basePath}`;
     }
     
-    return `${protocol}//${hostname}/api`;
+    return `${protocol}//${hostname}`;
   };
 
   const checkServerStatus = async () => {
     console.log('Verificando status do servidor...');
     
+    const serverUrl = getServerUrl();
+    
+    // Se estivermos no Lovable, marcar como offline
+    if (!serverUrl) {
+      console.log('Ambiente Lovable detectado - servidor offline');
+      setServerStatus('offline');
+      onStatusChange(false, 'offline');
+      return;
+    }
+    
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 5000);
       
-      const serverUrl = getServerUrl();
-      console.log('URL de verificação:', `${serverUrl}/health`);
+      console.log('URL de verificação:', `${serverUrl}/api/health`);
       
-      const response = await fetch(`${serverUrl}/health`, {
+      const response = await fetch(`${serverUrl}/api/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -62,23 +78,25 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
     }
 
     // Fallback para localhost:3001 se estivermos em desenvolvimento
-    try {
-      const response = await fetch('http://localhost:3001/api/health', {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        console.log('Servidor online (localhost fallback):', data);
-        setServerStatus('online');
-        onStatusChange(true, 'online');
-        return;
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      try {
+        const response = await fetch('http://localhost:3001/api/health', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('Servidor online (localhost fallback):', data);
+          setServerStatus('online');
+          onStatusChange(true, 'online');
+          return;
+        }
+      } catch (localError) {
+        console.log('Erro no fallback localhost:', localError);
       }
-    } catch (localError) {
-      console.log('Erro no fallback localhost:', localError);
     }
     
     console.log('Servidor offline');

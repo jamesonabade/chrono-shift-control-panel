@@ -28,6 +28,11 @@ const ScriptManager = () => {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
     
+    // No Lovable, não há backend real
+    if (hostname.includes('lovableproject.com')) {
+      return null;
+    }
+    
     // Em desenvolvimento local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       if (window.location.port === '8080') {
@@ -47,6 +52,11 @@ const ScriptManager = () => {
   const checkServerStatus = async () => {
     try {
       const serverUrl = getServerUrl();
+      if (!serverUrl) {
+        setIsServerAvailable(false);
+        return;
+      }
+      
       const response = await fetch(`${serverUrl}/api/health`, {
         method: 'GET',
         headers: {
