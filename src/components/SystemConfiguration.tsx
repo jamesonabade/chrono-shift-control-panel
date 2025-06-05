@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,16 +34,19 @@ const SystemConfiguration = () => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:3001';
     }
-    return `${protocol}//${hostname}:3001`;
+    
+    // Verificar se estamos em produção com base path
+    const basePath = import.meta.env.VITE_BASE_PATH || '';
+    return `${protocol}//${hostname}${basePath !== '/' ? basePath : ''}`;
   };
 
   const checkServerStatus = async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       const serverUrl = getServerUrl();
-      console.log('Verificando servidor:', serverUrl);
+      console.log('Verificando servidor:', `${serverUrl}/api/health`);
       
       const response = await fetch(`${serverUrl}/api/health`, {
         method: 'GET',
@@ -64,6 +68,25 @@ const SystemConfiguration = () => {
         setIsServerAvailable(false);
       }
     } catch (error) {
+      // Tentar também com localhost:3001 se a primeira tentativa falhar
+      try {
+        const response = await fetch('http://localhost:3001/api/health', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          console.log('Servidor online (localhost)');
+          setServerStatus('online');
+          setIsServerAvailable(true);
+          return;
+        }
+      } catch (localError) {
+        console.error('Erro ao verificar servidor local:', localError);
+      }
+      
       console.error('Erro ao verificar status do servidor:', error);
       setServerStatus('offline');
       setIsServerAvailable(false);
@@ -136,7 +159,8 @@ const SystemConfiguration = () => {
     formData.append('type', type);
 
     try {
-      const response = await fetch(`${getServerUrl()}/api/upload`, {
+      const serverUrl = getServerUrl();
+      const response = await fetch(`${serverUrl}/api/upload`, {
         method: 'POST',
         body: formData
       });

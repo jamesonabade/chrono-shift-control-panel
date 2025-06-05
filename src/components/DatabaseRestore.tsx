@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -10,6 +9,18 @@ const DatabaseRestore = () => {
   const [environment, setEnvironment] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
+
+  const getServerUrl = () => {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return 'http://localhost:3001';
+    }
+    
+    const basePath = import.meta.env.VITE_BASE_PATH || '';
+    return `${protocol}//${hostname}${basePath !== '/' ? basePath : ''}`;
+  };
 
   // Carregar último estado salvo
   useEffect(() => {
@@ -61,6 +72,8 @@ const DatabaseRestore = () => {
 
       // Executar todos os comandos vinculados
       let allSuccess = true;
+      const serverUrl = getServerUrl();
+      
       for (const commandId of databaseCommands) {
         const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');
         const command = allCommands.find((cmd: any) => cmd.id === commandId);
@@ -68,7 +81,7 @@ const DatabaseRestore = () => {
         if (command) {
           console.log('Executando comando:', command);
           
-          const response = await fetch('http://localhost:3001/api/execute-command', {
+          const response = await fetch(`${serverUrl}/api/execute-command`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

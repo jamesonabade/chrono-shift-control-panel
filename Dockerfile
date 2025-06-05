@@ -29,23 +29,23 @@ WORKDIR /app
 # Criar diretórios necessários
 RUN mkdir -p /app/scripts /app/logs /app/data
 
-# Copiar package files
+# Copiar apenas package files primeiro
 COPY package*.json ./
 
 # Instalar dependências
-RUN npm install
+RUN npm ci
 
-# Copiar código fonte
+# Copiar código fonte (excluindo node_modules via .dockerignore)
 COPY . .
-
-# Build da aplicação
-RUN npm run build
 
 # Dar permissões aos scripts
 RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
+RUN chmod -R 755 /app/scripts 2>/dev/null || true
+RUN chmod -R 755 /app/logs 2>/dev/null || true
+RUN chmod -R 755 /app/data 2>/dev/null || true
 
 # Expor porta
 EXPOSE 8080
 
-# Comando para iniciar
+# Comando para desenvolvimento
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]

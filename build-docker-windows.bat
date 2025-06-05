@@ -22,9 +22,11 @@ if /i "%USE_SAVED%"=="s" (
         if "%%a"=="IMAGE_NAME" set IMAGE_NAME=%%b
         if "%%a"=="TAG" set TAG=%%b
         if "%%a"=="DOMAIN" set DOMAIN=%%b
+        if "%%a"=="BASE_PATH" set BASE_PATH=%%b
     )
     echo   Imagem: !IMAGE_NAME!:!TAG!
     echo   Domínio: !DOMAIN!
+    echo   Contexto: !BASE_PATH!
     echo.
 ) else (
     :: Solicitar informações do usuário
@@ -45,10 +47,14 @@ if /i "%USE_SAVED%"=="s" (
         exit /b 1
     )
 
+    set /p BASE_PATH="Digite o caminho base da aplicação (ex: /scripts ou deixe vazio para /): "
+    if "%BASE_PATH%"=="" set BASE_PATH=/
+
     :: Salvar configuração para próxima vez
     echo IMAGE_NAME=%IMAGE_NAME% > %CONFIG_FILE%
     echo TAG=%TAG% >> %CONFIG_FILE%
     echo DOMAIN=%DOMAIN% >> %CONFIG_FILE%
+    echo BASE_PATH=%BASE_PATH% >> %CONFIG_FILE%
     echo Configuração salva em %CONFIG_FILE%
 )
 
@@ -57,11 +63,13 @@ echo ===========================================
 echo Configurações:
 echo   Imagem: %IMAGE_NAME%:%TAG%
 echo   Domínio: %DOMAIN%
+echo   Caminho: %BASE_PATH%
 echo ===========================================
 echo.
 
 :: Criar arquivo .env.production
-echo VITE_API_URL=https://%DOMAIN%/api > .env.production
+echo VITE_API_URL=https://%DOMAIN%%BASE_PATH%api > .env.production
+echo VITE_BASE_PATH=%BASE_PATH% >> .env.production
 echo NODE_ENV=production >> .env.production
 echo DOMAIN=%DOMAIN% >> .env.production
 

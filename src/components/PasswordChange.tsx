@@ -70,7 +70,12 @@ const PasswordChange = ({ username, isAdmin, onPasswordUpdate }: PasswordChangeP
       return;
     }
 
-    // Atualizar senha
+    // Atualizar senha no localStorage
+    const updatedCredentials = { ...credentials };
+    updatedCredentials[username] = newPassword;
+    localStorage.setItem('userCredentials', JSON.stringify(updatedCredentials));
+    
+    // Chamar callback para atualizar componente pai
     onPasswordUpdate(username, newPassword);
     
     // Limpar campos
@@ -83,6 +88,9 @@ const PasswordChange = ({ username, isAdmin, onPasswordUpdate }: PasswordChangeP
       title: "Senha alterada!",
       description: `Senha de ${username} foi atualizada com sucesso`,
     });
+
+    console.log('Senha alterada para usuário:', username);
+    console.log('Credenciais atualizadas no localStorage');
   };
 
   return (
