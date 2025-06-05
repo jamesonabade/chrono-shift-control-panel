@@ -33,24 +33,33 @@ const SystemConfiguration = () => {
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
       return 'http://localhost:3001';
     }
-    return `${protocol}//${hostname}`;
+    return `${protocol}//${hostname}:3001`;
   };
 
   const checkServerStatus = async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
       
-      const response = await fetch(`${getServerUrl()}/api/health`, {
+      const serverUrl = getServerUrl();
+      console.log('Verificando servidor:', serverUrl);
+      
+      const response = await fetch(`${serverUrl}/api/health`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
       if (response.ok) {
+        console.log('Servidor online');
         setServerStatus('online');
         setIsServerAvailable(true);
       } else {
+        console.log('Servidor respondeu com erro:', response.status);
         setServerStatus('offline');
         setIsServerAvailable(false);
       }
@@ -106,7 +115,6 @@ const SystemConfiguration = () => {
         variant: "destructive"
       });
       
-      // Fallback para localStorage
       const reader = new FileReader();
       reader.onload = (e) => {
         const result = e.target?.result as string;
@@ -193,7 +201,6 @@ const SystemConfiguration = () => {
           });
         }
       } else {
-        // Fallback para localStorage
         localStorage.setItem('serverTitle', serverTitle);
         localStorage.setItem('logoSize', logoSize.toString());
         localStorage.setItem('backgroundOpacity', backgroundOpacity.toString());
@@ -205,7 +212,6 @@ const SystemConfiguration = () => {
         });
       }
       
-      // Aplicar imediatamente
       updateTitle(serverTitle);
       
     } catch (error) {
@@ -355,7 +361,7 @@ const SystemConfiguration = () => {
               />
               <Button
                 onClick={() => backgroundFile && handleFileUpload(backgroundFile, 'background')}
-                disabled={!backgroundFile}
+                disabled={!backgroundFile || !isServerAvailable}
                 size="sm"
               >
                 <Upload className="w-4 h-4" />
@@ -374,7 +380,7 @@ const SystemConfiguration = () => {
               />
               <Button
                 onClick={() => logoFile && handleFileUpload(logoFile, 'logo')}
-                disabled={!logoFile}
+                disabled={!logoFile || !isServerAvailable}
                 size="sm"
               >
                 <Upload className="w-4 h-4" />
@@ -393,7 +399,7 @@ const SystemConfiguration = () => {
               />
               <Button
                 onClick={() => faviconFile && handleFileUpload(faviconFile, 'favicon')}
-                disabled={!faviconFile}
+                disabled={!faviconFile || !isServerAvailable}
                 size="sm"
               >
                 <Upload className="w-4 h-4" />

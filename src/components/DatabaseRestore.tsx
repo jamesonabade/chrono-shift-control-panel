@@ -46,14 +46,15 @@ const DatabaseRestore = () => {
         return;
       }
 
-      // Carregar variáveis fixas do sistema
+      // Carregar variáveis fixas do sistema (incluindo variáveis gerais)
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
       console.log('Variáveis do sistema:', systemVars);
       
       const envVariables = {
-        ENVIRONMENT: environment,
-        ENV: environment,
-        ...(systemVars.database || {})
+        DB_RESTORE: environment,
+        DB_SYSTEM: environment,
+        ...(systemVars.database || {}),
+        ...(systemVars.general || {}) // Incluir variáveis gerais
       };
 
       console.log('Variáveis de ambiente para execução:', envVariables);
@@ -178,7 +179,7 @@ const DatabaseRestore = () => {
       )}
 
       <div className="p-3 bg-slate-700/20 rounded text-xs text-slate-400">
-        <p><strong>Variáveis disponíveis:</strong> $ENVIRONMENT, $ENV + variáveis personalizadas</p>
+        <p><strong>Variáveis disponíveis:</strong> $DB_RESTORE, $DB_SYSTEM + variáveis personalizadas</p>
       </div>
     </div>
   );

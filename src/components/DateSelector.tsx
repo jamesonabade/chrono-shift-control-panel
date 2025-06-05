@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -8,6 +9,7 @@ import { Calendar, Play } from 'lucide-react';
 const DateSelector = () => {
   const [selectedDay, setSelectedDay] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
@@ -15,21 +17,23 @@ const DateSelector = () => {
   useEffect(() => {
     const savedDay = localStorage.getItem('lastSelectedDay');
     const savedMonth = localStorage.getItem('lastSelectedMonth');
+    const savedYear = localStorage.getItem('lastSelectedYear');
     if (savedDay) setSelectedDay(savedDay);
     if (savedMonth) setSelectedMonth(savedMonth);
+    if (savedYear) setSelectedYear(savedYear);
   }, []);
 
   const executeCommand = async () => {
-    if (!selectedDay || !selectedMonth) {
+    if (!selectedDay || !selectedMonth || !selectedYear) {
       toast({
         title: "Dados incompletos",
-        description: "Por favor, selecione o dia e mês",
+        description: "Por favor, selecione o dia, mês e ano",
         variant: "destructive"
       });
       return;
     }
 
-    const formattedDate = `${selectedDay.padStart(2, '0')}/${selectedMonth.padStart(2, '0')}`;
+    const formattedDate = `${selectedDay.padStart(2, '0')}/${selectedMonth.padStart(2, '0')}/${selectedYear}`;
 
     setIsExecuting(true);
 
@@ -50,7 +54,7 @@ const DateSelector = () => {
         return;
       }
 
-      // Carregar variáveis fixas do sistema
+      // Carregar variáveis fixas do sistema (incluindo variáveis gerais)
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
       console.log('Variáveis do sistema:', systemVars);
       
@@ -59,7 +63,9 @@ const DateSelector = () => {
         DATE: formattedDate,
         DAY: selectedDay.padStart(2, '0'),
         MONTH: selectedMonth.padStart(2, '0'),
-        ...(systemVars.date || {})
+        YEAR: selectedYear,
+        ...(systemVars.date || {}),
+        ...(systemVars.general || {}) // Incluir variáveis gerais
       };
 
       console.log('Variáveis de ambiente para execução:', envVariables);
@@ -106,6 +112,7 @@ const DateSelector = () => {
         // Salvar último estado aplicado
         localStorage.setItem('lastSelectedDay', selectedDay);
         localStorage.setItem('lastSelectedMonth', selectedMonth);
+        localStorage.setItem('lastSelectedYear', selectedYear);
         
         toast({
           title: "Data aplicada!",
@@ -157,9 +164,10 @@ const DateSelector = () => {
     }
   };
 
-  // Gerar arrays para dias e meses
+  // Gerar arrays para dias, meses e anos
   const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
   const months = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const years = Array.from({ length: 50 }, (_, i) => (new Date().getFullYear() - 25 + i).toString());
 
   return (
     <div className="space-y-6">
@@ -169,12 +177,12 @@ const DateSelector = () => {
       </div>
       
       <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label htmlFor="day" className="text-slate-300">Dia</Label>
             <Select value={selectedDay} onValueChange={setSelectedDay}>
               <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
-                <SelectValue placeholder="Selecione o dia" />
+                <SelectValue placeholder="Dia" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-600 text-white max-h-60">
                 {days.map(day => (
@@ -189,7 +197,7 @@ const DateSelector = () => {
             <Label htmlFor="month" className="text-slate-300">Mês</Label>
             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
               <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
-                <SelectValue placeholder="Selecione o mês" />
+                <SelectValue placeholder="Mês" />
               </SelectTrigger>
               <SelectContent className="bg-slate-800 border-slate-600 text-white">
                 {months.map(month => (
@@ -200,12 +208,27 @@ const DateSelector = () => {
               </SelectContent>
             </Select>
           </div>
+          <div className="space-y-2">
+            <Label htmlFor="year" className="text-slate-300">Ano</Label>
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 text-white max-h-60">
+                {years.map(year => (
+                  <SelectItem key={year} value={year} className="hover:bg-slate-700">
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
       <Button 
         onClick={executeCommand}
-        disabled={!selectedDay || !selectedMonth || isExecuting}
+        disabled={!selectedDay || !selectedMonth || !selectedYear || isExecuting}
         className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-3"
       >
         {isExecuting ? (
@@ -216,16 +239,16 @@ const DateSelector = () => {
         {isExecuting ? 'Aplicando...' : 'Aplicar Data'}
       </Button>
 
-      {selectedDay && selectedMonth && (
+      {selectedDay && selectedMonth && selectedYear && (
         <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
           <p className="text-blue-300 text-sm">
-            <strong>Nova data:</strong> {selectedDay}/{selectedMonth}
+            <strong>Nova data:</strong> {selectedDay}/{selectedMonth}/{selectedYear}
           </p>
         </div>
       )}
 
       <div className="p-3 bg-slate-700/20 rounded text-xs text-slate-400">
-        <p><strong>Variáveis disponíveis:</strong> $NEW_DATE, $DATE, $DAY, $MONTH + variáveis personalizadas</p>
+        <p><strong>Variáveis disponíveis:</strong> $NEW_DATE, $DATE, $DAY, $MONTH, $YEAR + variáveis personalizadas</p>
       </div>
     </div>
   );
