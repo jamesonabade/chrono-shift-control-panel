@@ -24,12 +24,20 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
     
+    // Em desenvolvimento local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3001';
+      if (window.location.port === '8080') {
+        return 'http://localhost:3001';
+      }
     }
     
+    // Em Docker ou produção
     const basePath = import.meta.env.VITE_BASE_PATH || '';
-    return `${protocol}//${hostname}${basePath !== '/' ? basePath : ''}`;
+    if (basePath && basePath !== '/') {
+      return `${protocol}//${hostname}${basePath}`;
+    }
+    
+    return `${protocol}//${hostname}`;
   };
 
   const handleFileUpload = async (file: File, type: 'background' | 'logo' | 'favicon') => {
@@ -62,6 +70,8 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
 
     try {
       const serverUrl = getServerUrl();
+      console.log('Upload para:', `${serverUrl}/api/upload`);
+      
       const response = await fetch(`${serverUrl}/api/upload`, {
         method: 'POST',
         body: formData
@@ -112,7 +122,10 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
 
     try {
       if (isServerAvailable) {
-        const response = await fetch(`${getServerUrl()}/api/customizations`, {
+        const serverUrl = getServerUrl();
+        console.log('Salvando customizações em:', `${serverUrl}/api/customizations`);
+        
+        const response = await fetch(`${serverUrl}/api/customizations`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -125,6 +138,8 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
             title: "Configurações salvas!",
             description: "Personalizações aplicadas com sucesso",
           });
+        } else {
+          throw new Error('Falha ao salvar no servidor');
         }
       } else {
         localStorage.setItem('serverTitle', serverTitle);
@@ -201,7 +216,7 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
             />
             <Button
               onClick={() => backgroundFile && handleFileUpload(backgroundFile, 'background')}
-              disabled={!backgroundFile || !isServerAvailable}
+              disabled={!backgroundFile}
               size="sm"
             >
               <Upload className="w-4 h-4" />
@@ -220,7 +235,7 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
             />
             <Button
               onClick={() => logoFile && handleFileUpload(logoFile, 'logo')}
-              disabled={!logoFile || !isServerAvailable}
+              disabled={!logoFile}
               size="sm"
             >
               <Upload className="w-4 h-4" />
@@ -239,7 +254,7 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
             />
             <Button
               onClick={() => faviconFile && handleFileUpload(faviconFile, 'favicon')}
-              disabled={!faviconFile || !isServerAvailable}
+              disabled={!faviconFile}
               size="sm"
             >
               <Upload className="w-4 h-4" />

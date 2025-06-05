@@ -14,12 +14,20 @@ const DatabaseRestore = () => {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
     
+    // Em desenvolvimento local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3001';
+      if (window.location.port === '8080') {
+        return 'http://localhost:3001';
+      }
     }
     
+    // Em Docker ou produção
     const basePath = import.meta.env.VITE_BASE_PATH || '';
-    return `${protocol}//${hostname}${basePath !== '/' ? basePath : ''}`;
+    if (basePath && basePath !== '/') {
+      return `${protocol}//${hostname}${basePath}`;
+    }
+    
+    return `${protocol}//${hostname}`;
   };
 
   // Carregar último estado salvo
@@ -73,6 +81,7 @@ const DatabaseRestore = () => {
       // Executar todos os comandos vinculados
       let allSuccess = true;
       const serverUrl = getServerUrl();
+      console.log('URL do servidor para execução:', `${serverUrl}/api/execute-command`);
       
       for (const commandId of databaseCommands) {
         const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');

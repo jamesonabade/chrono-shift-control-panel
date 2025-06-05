@@ -12,23 +12,33 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
     
+    // Em desenvolvimento local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3001';
+      if (window.location.port === '8080') {
+        return 'http://localhost:3001';
+      }
     }
     
+    // Em Docker ou produção
     const basePath = import.meta.env.VITE_BASE_PATH || '';
-    return `${protocol}//${hostname}${basePath !== '/' ? basePath : ''}`;
+    if (basePath && basePath !== '/') {
+      return `${protocol}//${hostname}${basePath}/api`;
+    }
+    
+    return `${protocol}//${hostname}/api`;
   };
 
   const checkServerStatus = async () => {
+    console.log('Verificando status do servidor...');
+    
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       const serverUrl = getServerUrl();
-      console.log('Verificando servidor:', `${serverUrl}/api/health`);
+      console.log('URL de verificação:', `${serverUrl}/health`);
       
-      const response = await fetch(`${serverUrl}/api/health`, {
+      const response = await fetch(`${serverUrl}/health`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -39,37 +49,41 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
       clearTimeout(timeoutId);
       
       if (response.ok) {
-        console.log('Servidor online');
+        const data = await response.json();
+        console.log('Servidor online, resposta:', data);
         setServerStatus('online');
         onStatusChange(true, 'online');
+        return;
       } else {
-        console.log('Servidor respondeu com erro:', response.status);
-        setServerStatus('offline');
-        onStatusChange(false, 'offline');
+        console.log('Servidor respondeu com erro:', response.status, response.statusText);
       }
     } catch (error) {
-      try {
-        const response = await fetch('http://localhost:3001/api/health', {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        
-        if (response.ok) {
-          console.log('Servidor online (localhost)');
-          setServerStatus('online');
-          onStatusChange(true, 'online');
-          return;
-        }
-      } catch (localError) {
-        console.error('Erro ao verificar servidor local:', localError);
-      }
-      
-      console.error('Erro ao verificar status do servidor:', error);
-      setServerStatus('offline');
-      onStatusChange(false, 'offline');
+      console.log('Erro na verificação principal:', error);
     }
+
+    // Fallback para localhost:3001 se estivermos em desenvolvimento
+    try {
+      const response = await fetch('http://localhost:3001/api/health', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('Servidor online (localhost fallback):', data);
+        setServerStatus('online');
+        onStatusChange(true, 'online');
+        return;
+      }
+    } catch (localError) {
+      console.log('Erro no fallback localhost:', localError);
+    }
+    
+    console.log('Servidor offline');
+    setServerStatus('offline');
+    onStatusChange(false, 'offline');
   };
 
   useEffect(() => {

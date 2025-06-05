@@ -1,5 +1,6 @@
 
 @echo off
+chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ===========================================
@@ -16,9 +17,9 @@ if exist %CONFIG_FILE% (
     set /p USE_SAVED="Deseja usar a configuração anterior? (s/n): "
 )
 
-if /i "%USE_SAVED%"=="s" (
+if /i "!USE_SAVED!"=="s" (
     echo Carregando configuração salva...
-    for /f "delims== tokens=1,2" %%a in (%CONFIG_FILE%) do (
+    for /f "usebackq delims== tokens=1,2" %%a in ("%CONFIG_FILE%") do (
         if "%%a"=="IMAGE_NAME" set IMAGE_NAME=%%b
         if "%%a"=="TAG" set TAG=%%b
         if "%%a"=="DOMAIN" set DOMAIN=%%b
@@ -31,47 +32,49 @@ if /i "%USE_SAVED%"=="s" (
 ) else (
     :: Solicitar informações do usuário
     set /p IMAGE_NAME="Digite o nome da imagem (registry/nomedaimagem): "
-    if "%IMAGE_NAME%"=="" (
+    if "!IMAGE_NAME!"=="" (
         echo Erro: Nome da imagem é obrigatório!
         pause
         exit /b 1
     )
 
     set /p TAG="Digite a tag (deixe vazio para 'latest'): "
-    if "%TAG%"=="" set TAG=latest
+    if "!TAG!"=="" set TAG=latest
 
     set /p DOMAIN="Digite o domínio: "
-    if "%DOMAIN%"=="" (
+    if "!DOMAIN!"=="" (
         echo Erro: Domínio é obrigatório!
         pause
         exit /b 1
     )
 
     set /p BASE_PATH="Digite o caminho base da aplicação (ex: /scripts ou deixe vazio para /): "
-    if "%BASE_PATH%"=="" set BASE_PATH=/
+    if "!BASE_PATH!"=="" set BASE_PATH=/
 
     :: Salvar configuração para próxima vez
-    echo IMAGE_NAME=%IMAGE_NAME% > %CONFIG_FILE%
-    echo TAG=%TAG% >> %CONFIG_FILE%
-    echo DOMAIN=%DOMAIN% >> %CONFIG_FILE%
-    echo BASE_PATH=%BASE_PATH% >> %CONFIG_FILE%
+    echo IMAGE_NAME=!IMAGE_NAME! > %CONFIG_FILE%
+    echo TAG=!TAG! >> %CONFIG_FILE%
+    echo DOMAIN=!DOMAIN! >> %CONFIG_FILE%
+    echo BASE_PATH=!BASE_PATH! >> %CONFIG_FILE%
     echo Configuração salva em %CONFIG_FILE%
 )
 
 echo.
 echo ===========================================
 echo Configurações:
-echo   Imagem: %IMAGE_NAME%:%TAG%
-echo   Domínio: %DOMAIN%
-echo   Caminho: %BASE_PATH%
+echo   Imagem: !IMAGE_NAME!:!TAG!
+echo   Domínio: !DOMAIN!
+echo   Caminho: !BASE_PATH!
 echo ===========================================
 echo.
 
 :: Criar arquivo .env.production
-echo VITE_API_URL=https://%DOMAIN%%BASE_PATH%api > .env.production
-echo VITE_BASE_PATH=%BASE_PATH% >> .env.production
-echo NODE_ENV=production >> .env.production
-echo DOMAIN=%DOMAIN% >> .env.production
+(
+echo VITE_API_URL=https://!DOMAIN!!BASE_PATH!api
+echo VITE_BASE_PATH=!BASE_PATH!
+echo NODE_ENV=production
+echo DOMAIN=!DOMAIN!
+) > .env.production
 
 echo Arquivo .env.production criado com sucesso!
 echo.
@@ -81,7 +84,7 @@ echo ===========================================
 echo Building Frontend Image...
 echo ===========================================
 :retry_frontend
-docker build -f Dockerfile.frontend.prod -t %IMAGE_NAME%-frontend:%TAG% .
+docker build -f Dockerfile.frontend.prod -t !IMAGE_NAME!-frontend:!TAG! .
 if %errorlevel% neq 0 (
     echo Erro no build do frontend!
     set /p RETRY="Deseja tentar novamente? (s/n): "
@@ -98,7 +101,7 @@ echo ===========================================
 echo Building Backend Image...
 echo ===========================================
 :retry_backend
-docker build -f backend/Dockerfile.prod -t %IMAGE_NAME%-backend:%TAG% ./backend
+docker build -f backend/Dockerfile.prod -t !IMAGE_NAME!-backend:!TAG! ./backend
 if %errorlevel% neq 0 (
     echo Erro no build do backend!
     set /p RETRY="Deseja tentar novamente? (s/n): "
@@ -113,11 +116,11 @@ echo.
 :: Perguntar sobre push
 echo ===========================================
 set /p PUSH_CHOICE="Deseja enviar (push) as imagens para o registry agora? (s/n): "
-if /i "%PUSH_CHOICE%"=="s" (
+if /i "!PUSH_CHOICE!"=="s" (
     echo.
     echo Enviando imagens para o registry...
-    docker push %IMAGE_NAME%-frontend:%TAG%
-    docker push %IMAGE_NAME%-backend:%TAG%
+    docker push !IMAGE_NAME!-frontend:!TAG!
+    docker push !IMAGE_NAME!-backend:!TAG!
     echo.
     echo Push concluído!
 ) else (
