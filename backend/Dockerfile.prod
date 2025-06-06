@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y \
     curl \
     sudo \
     postgresql-client \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -52,9 +53,12 @@ RUN npm install --omit=dev
 # Copiar código fonte
 COPY . .
 
-# Copiar e dar permissões ao script de inicialização
+# Copiar e configurar script de inicialização
 COPY backend/init-prod.sh /app/init.sh
 RUN chmod +x /app/init.sh
+
+# Converter quebras de linha para formato Unix
+RUN dos2unix /app/init.sh 2>/dev/null || sed -i 's/\r$//' /app/init.sh
 
 # Dar permissões
 RUN chmod -R 755 /app/scripts 2>/dev/null || true

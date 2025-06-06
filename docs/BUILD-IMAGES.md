@@ -31,6 +31,54 @@ docker push registry.uesb.br/sig-testes/timeeventos-frontend:latest
 docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
 ```
 
+## 🚨 Problemas Comuns e Soluções
+
+### Erro: "exec format error"
+
+**Causa:** Arquivo de script com terminações de linha Windows (CRLF) em vez de Unix (LF)
+
+**Soluções:**
+1. **Git configuração (recomendado):**
+   ```bash
+   git config core.autocrlf false
+   git rm --cached -r .
+   git reset --hard
+   ```
+
+2. **Conversão manual:**
+   ```bash
+   # Linux/macOS
+   dos2unix frontend-entrypoint.sh
+   dos2unix backend/init-prod.sh
+   
+   # Windows (Git Bash)
+   sed -i 's/\r$//' frontend-entrypoint.sh
+   sed -i 's/\r$//' backend/init-prod.sh
+   ```
+
+3. **Usar editor com configuração Unix:**
+   - VS Code: Configure `"files.eol": "\n"`
+   - Notepad++: Edit → EOL Conversion → Unix (LF)
+
+### Erro: "Syntax error: word unexpected"
+
+**Causa:** Caracteres invisíveis ou quebras de linha incorretas nos scripts bash
+
+**Solução:** Os Dockerfiles já incluem `dos2unix` para corrigir automaticamente
+
+### Erro: "not found" em scripts
+
+**Causa:** Problemas de encoding ou caracteres especiais
+
+**Verificação:**
+```bash
+# Verificar encoding do arquivo
+file frontend-entrypoint.sh
+file backend/init-prod.sh
+
+# Deve mostrar: "ASCII text" ou "UTF-8 Unicode text"
+```
+
 ## 🚀 Opções de Deploy no Portainer
 
 ### Opção 1: Imagens Pré-construídas (Recomendado para Produção)
@@ -74,6 +122,7 @@ docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
 - ✅ Logs detalhados de inicialização
 - ✅ Health check endpoint
 - ✅ Verificação de variáveis de ambiente
+- ✅ Conversão automática de quebras de linha
 
 ### Backend
 - ✅ Aguarda PostgreSQL estar disponível
@@ -82,10 +131,36 @@ docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
 - ✅ Verifica conectividade com Docker
 - ✅ Logs coloridos e informativos
 - ✅ Health check endpoint
+- ✅ Conversão automática de quebras de linha
 
 ## 📋 Preparação para Produção
 
-### 1. Teste Local
+### 1. Configurar Git Corretamente
+
+```bash
+# Configurar para não converter quebras de linha
+git config core.autocrlf false
+
+# Verificar configuração
+git config --list | grep autocrlf
+
+# Limpar cache e resetar arquivos
+git rm --cached -r .
+git reset --hard
+```
+
+### 2. Verificar Arquivos de Script
+
+```bash
+# Verificar formato dos scripts
+file frontend-entrypoint.sh
+file backend/init-prod.sh
+
+# Corrigir se necessário
+dos2unix frontend-entrypoint.sh backend/init-prod.sh
+```
+
+### 3. Teste Local
 
 Teste as imagens localmente antes do deploy:
 
@@ -107,42 +182,7 @@ docker run -p 3001:3001 \
   registry.uesb.br/sig-testes/timeeventos-backend:latest
 ```
 
-### 2. Estrutura de Arquivos
-
-Para que o build funcione corretamente, certifique-se de que a estrutura está assim:
-
-```
-projeto/
-├── Dockerfile.frontend.prod          # Dockerfile do frontend
-├── frontend-entrypoint.sh            # Script de entrypoint do frontend
-├── nginx-frontend.conf               # Configuração do nginx
-├── backend/
-│   ├── Dockerfile.prod              # Dockerfile do backend
-│   ├── init-prod.sh                 # Script de inicialização do backend
-│   ├── package.json
-│   └── ... (outros arquivos backend)
-├── src/
-├── package.json
-└── ... (outros arquivos frontend)
-```
-
 ## 🔍 Monitoramento e Logs
-
-### Verificar Status dos Containers
-
-```bash
-# Status de todos os containers
-docker ps | grep sistema
-
-# Logs do frontend
-docker logs -f sistema-producao_frontend_1
-
-# Logs do backend
-docker logs -f sistema-producao_backend_1
-
-# Logs do banco de dados
-docker logs -f sistema-producao_database_1
-```
 
 ### O que esperar nos logs:
 
@@ -172,66 +212,53 @@ Sistema backend pronto para uso!
 
 ## 🔧 Troubleshooting
 
-### Container não inicia ou fica em "Starting"
+### Scripts não executam ou têm erros de sintaxe
 
-**Possíveis causas:**
-1. Banco de dados não está disponível
-2. Variáveis de ambiente incorretas
-3. Problemas de conectividade entre containers
+**Solução rápida:**
+```bash
+# Re-construir imagens após corrigir scripts
+docker build --no-cache -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
+docker build --no-cache -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest .
+```
+
+### Container não inicia ou fica em "Starting"
 
 **Verificações:**
 ```bash
 # Verificar logs detalhados
 docker logs sistema-producao_backend_1
 
-# Verificar conectividade com banco
-docker exec sistema-producao_backend_1 pg_isready -h database -U sistema_user
-
-# Verificar variáveis de ambiente
-docker exec sistema-producao_backend_1 env | grep -E "DB_|DOMAIN|BASE_PATH"
+# Verificar formato dos scripts dentro do container
+docker exec sistema-producao_backend_1 file /app/init.sh
 ```
-
-### Backend não consegue conectar no banco
-
-**Solução:**
-1. Verificar se o container do banco está rodando
-2. Verificar se as credenciais estão corretas
-3. Aguardar mais tempo (banco pode demorar para inicializar)
-
-### Frontend não consegue acessar backend
-
-**Solução:**
-1. Verificar se `VITE_API_URL` está configurado corretamente
-2. Verificar se o backend está respondendo no health check
-3. Verificar configuração de proxy no nginx
-
-### Erro: "pg_isready: not found"
-
-**Causa:** PostgreSQL client não está instalado no container
-
-**Solução:** As imagens já foram corrigidas para incluir `postgresql-client`
 
 ## ✅ Checklist de Build
 
+- [ ] Git configurado com `core.autocrlf false`
+- [ ] Scripts têm quebras de linha Unix (LF)
 - [ ] Arquivo `frontend-entrypoint.sh` existe na raiz
 - [ ] Arquivo `nginx-frontend.conf` existe na raiz
 - [ ] Arquivo `backend/init-prod.sh` existe e tem permissões de execução
 - [ ] Comando de build do frontend usa contexto `.` (raiz)
 - [ ] Comando de build do backend usa contexto `.` (raiz) 
-- [ ] Imagens construídas e testadas
-- [ ] Registry configurado (se aplicável)
-- [ ] Push realizado com sucesso
-- [ ] Entrypoints testados e funcionando
+- [ ] Imagens construídas com `--no-cache` se houve problemas
 - [ ] Logs de inicialização aparecem corretamente
+- [ ] Entrypoints executam sem erros de sintaxe
 
 ## 🎯 Comandos Finais Corretos
 
 ```bash
+# Configurar Git (apenas primeira vez)
+git config core.autocrlf false
+
+# Corrigir scripts se necessário
+dos2unix frontend-entrypoint.sh backend/init-prod.sh
+
 # Frontend
-docker build -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
+docker build --no-cache -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
 
 # Backend  
-docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest .
+docker build --no-cache -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest .
 
 # Push
 docker push registry.uesb.br/sig-testes/timeeventos-frontend:latest
@@ -242,9 +269,10 @@ docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
 
 Para atualizar o sistema:
 
-1. **Reconstrua** as imagens com as alterações
-2. **Faça push** das novas versões
-3. **No Portainer** → Stacks → seu-stack → "Redeploy"
-4. **Monitore** os logs para garantir inicialização correta
+1. **Corrigir** formato de arquivos se necessário
+2. **Reconstruir** as imagens com `--no-cache`
+3. **Fazer push** das novas versões
+4. **No Portainer** → Stacks → seu-stack → "Redeploy"
+5. **Monitorar** os logs para garantir inicialização correta
 
 Os entrypoints garantem que cada container seja configurado adequadamente antes de inicializar, proporcionando maior confiabilidade no deploy.
