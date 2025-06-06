@@ -63,37 +63,58 @@ services:
           listen 80;
           server_name _;
           
-          # Configuração para subpath se BASE_PATH estiver definido
-          set \$$base_path '${BASE_PATH:-}';
-          
-          location \$$base_path/ {
-              proxy_pass http://frontend/;
-              proxy_set_header Host \$$host;
-              proxy_set_header X-Real-IP \$$remote_addr;
-              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto \$$scheme;
-              proxy_set_header X-Base-Path \$$base_path;
-              
-              # Remove o prefixo do path se necessário
-              if (\$$base_path != '') {
-                  rewrite ^\$$base_path(/.*)$$ \$$1 break;
-              }
-          }
-          
-          location \$$base_path/api/ {
-              proxy_pass http://backend/api/;
-              proxy_set_header Host \$$host;
-              proxy_set_header X-Real-IP \$$remote_addr;
-              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto \$$scheme;
-              proxy_set_header X-Base-Path \$$base_path;
-          }
-          
           # Health check endpoint
           location /health {
               access_log off;
               return 200 'healthy';
               add_header Content-Type text/plain;
+          }
+          
+          # API routes - sempre primeiro para não conflitar
+          location ${BASE_PATH:-}/api/ {
+              proxy_pass http://backend/api/;
+              proxy_set_header Host \$$host;
+              proxy_set_header X-Real-IP \$$remote_addr;
+              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$$scheme;
+              proxy_set_header X-Base-Path '${BASE_PATH:-}';
+          }
+          
+          # Uploads estáticos
+          location ${BASE_PATH:-}/uploads/ {
+              proxy_pass http://backend/uploads/;
+              proxy_set_header Host \$$host;
+              proxy_set_header X-Real-IP \$$remote_addr;
+              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$$scheme;
+              
+              # Cache para uploads
+              expires 1d;
+              add_header Cache-Control 'public, immutable';
+          }
+          
+          # Frontend - SPA com fallback
+          location ${BASE_PATH:-}/ {
+              proxy_pass http://frontend/;
+              proxy_set_header Host \$$host;
+              proxy_set_header X-Real-IP \$$remote_addr;
+              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$$scheme;
+              proxy_set_header X-Base-Path '${BASE_PATH:-}';
+              
+              # Para SPA - fallback para index.html em caso de 404
+              proxy_intercept_errors on;
+              error_page 404 = @spa_fallback;
+          }
+          
+          # Fallback para SPA
+          location @spa_fallback {
+              proxy_pass http://frontend/;
+              proxy_set_header Host \$$host;
+              proxy_set_header X-Real-IP \$$remote_addr;
+              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$$scheme;
+              proxy_set_header X-Base-Path '${BASE_PATH:-}';
           }
       }
       EOF
