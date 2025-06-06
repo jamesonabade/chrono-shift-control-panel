@@ -46,14 +46,14 @@ WORKDIR /app
 # Criar diretórios necessários
 RUN mkdir -p /app/data /app/scripts /app/logs /app/uploads
 
-# Copiar arquivos do backend
-COPY package*.json ./
+# Copiar package.json do backend primeiro
+COPY backend/package*.json ./
 RUN npm install --omit=dev
 
-# Copiar código fonte
-COPY . .
+# Copiar todo o código do backend
+COPY backend/ ./
 
-# Copiar e configurar script de inicialização
+# Copiar script de inicialização do backend
 COPY backend/init-prod.sh /app/init.sh
 
 # Converter quebras de linha e dar permissões

@@ -26,12 +26,24 @@ log "   • VITE_PUBLIC_URL: ${VITE_PUBLIC_URL:-}"
 
 # Aguardar backend estar disponível
 log "🔍 Aguardando backend ficar disponível..."
-BACKEND_URL="${VITE_API_URL:-/api}/health"
+
+# Construir URL do backend considerando BASE_PATH
+BASE_PATH="${VITE_BASE_PATH:-/}"
+if [ "$BASE_PATH" != "/" ] && [ -n "$BASE_PATH" ]; then
+    # Remove trailing slash se existir
+    BASE_PATH="${BASE_PATH%/}"
+    BACKEND_URL="${BASE_PATH}/api/health"
+else
+    BACKEND_URL="/api/health"
+fi
+
+log "   • URL de verificação: $BACKEND_URL"
+
 RETRY_COUNT=0
 MAX_RETRIES=30
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if curl -f -s "$BACKEND_URL" > /dev/null 2>&1; then
+    if curl -f -s "http://backend:3001/api/health" > /dev/null 2>&1; then
         log "✅ Backend está disponível"
         break
     else

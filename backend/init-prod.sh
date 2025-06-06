@@ -29,6 +29,16 @@ log "   • DB_HOST: ${DB_HOST:-database}"
 log "   • DB_NAME: ${DB_NAME:-sistema_db}"
 log "   • DB_USER: ${DB_USER:-sistema_user}"
 
+# Verificar se server.js existe
+if [ ! -f "/app/server.js" ]; then
+    error "❌ Arquivo server.js não encontrado em /app/"
+    log "📁 Listando arquivos em /app/:"
+    ls -la /app/
+    exit 1
+fi
+
+log "✅ Arquivo server.js encontrado"
+
 # Aguardar banco de dados
 if [ -n "$DB_HOST" ]; then
     log "🗄️ Aguardando banco de dados PostgreSQL..."
