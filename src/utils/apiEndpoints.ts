@@ -37,14 +37,14 @@ export const getApiConfig = (): ApiConfig => {
     return config;
   }
   
-  // 2. DOCKER COMPOSE (nginx + containers)
+  // 2. DOCKER COMPOSE LOCAL (nginx + containers)
   if ((hostname === 'localhost' || hostname === '127.0.0.1') && (port === '80' || port === '')) {
     const config: ApiConfig = {
       baseUrl: `${protocol}//${hostname}${port ? `:${port}` : ''}`,
       healthUrl: `${protocol}//${hostname}${port ? `:${port}` : ''}/api/health`,
       environment: 'docker'
     };
-    console.log('✅ Ambiente: DOCKER COMPOSE');
+    console.log('✅ Ambiente: DOCKER COMPOSE LOCAL');
     console.log(`  API Base URL: ${config.baseUrl}`);
     return config;
   }
@@ -65,7 +65,7 @@ export const getApiConfig = (): ApiConfig => {
   }
   
   const config: ApiConfig = {
-    baseUrl: `${protocol}//${hostname}${basePath}`,
+    baseUrl: `${protocol}//${hostname}`,
     healthUrl: `${protocol}//${hostname}${basePath}/api/health`,
     environment: 'production'
   };
@@ -73,6 +73,7 @@ export const getApiConfig = (): ApiConfig => {
   console.log('✅ Ambiente: PRODUÇÃO');
   console.log(`  Base Path: ${basePath || '(raiz)'}`);
   console.log(`  API Base URL: ${config.baseUrl}`);
+  console.log(`  Health URL: ${config.healthUrl}`);
   
   return config;
 };
@@ -81,7 +82,15 @@ export const getApiConfig = (): ApiConfig => {
  * Retorna a URL base da API para o ambiente atual
  */
 export const getApiBaseUrl = (): string => {
-  return getApiConfig().baseUrl;
+  const config = getApiConfig();
+  const basePath = import.meta.env.VITE_BASE_PATH;
+  
+  // Para produção com subpath
+  if (config.environment === 'production' && basePath && basePath !== '/') {
+    return `${config.baseUrl}${basePath}`;
+  }
+  
+  return config.baseUrl;
 };
 
 /**

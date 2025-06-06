@@ -5,6 +5,7 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { execSync } = require('child_process');
+const db = require('./database');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +16,7 @@ const DATA_DIR = process.env.DATA_DIR || '/app/data';
 const SCRIPTS_DIR = process.env.SCRIPTS_DIR || '/app/scripts';
 const LOGS_DIR = process.env.LOGS_DIR || '/app/logs';
 const UPLOADS_DIR = process.env.UPLOADS_DIR || '/app/uploads';
+const BASE_PATH = process.env.BASE_PATH || '';
 
 // Criar diretórios necessários
 const createDirectories = () => {
@@ -27,46 +29,12 @@ const createDirectories = () => {
   });
 };
 
-// Inicializar configurações padrão
-const initializeDefaultConfig = () => {
-  const configFile = path.join(DATA_DIR, 'system-config.json');
-  
-  if (!fs.existsSync(configFile)) {
-    const defaultConfig = {
-      users: {
-        'administrador': 'admin123',
-        'usuario': 'user123'
-      },
-      permissions: {
-        'usuario': {
-          date: true,
-          database: false,
-          scripts: true,
-          users: false,
-          logs: true
-        }
-      },
-      customizations: {
-        background: '',
-        logo: '',
-        favicon: '',
-        title: 'PAINEL DE CONTROLE',
-        subtitle: 'Sistema de Gerenciamento Docker'
-      },
-      systemVariables: {},
-      lastUpdated: new Date().toISOString()
-    };
-    
-    fs.writeFileSync(configFile, JSON.stringify(defaultConfig, null, 2));
-    console.log('✅ Configuração padrão criada');
-  }
-};
-
 // Middleware
 app.use(cors({
   origin: true,
   credentials: true
 }));
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -89,186 +57,211 @@ const upload = multer({
   limits: { fileSize: 100 * 1024 * 1024 } // 100MB
 });
 
-// Utilitários para gerenciar configurações
-const getConfig = () => {
-  const configFile = path.join(DATA_DIR, 'system-config.json');
-  if (fs.existsSync(configFile)) {
-    return JSON.parse(fs.readFileSync(configFile, 'utf8'));
-  }
-  return null;
-};
-
-const saveConfig = (config) => {
-  const configFile = path.join(DATA_DIR, 'system-config.json');
-  config.lastUpdated = new Date().toISOString();
-  fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-};
-
-// Logs centralizados
-const logAction = (action, details, user = 'system') => {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    action,
-    details,
-    user
-  };
-  
-  const logsFile = path.join(LOGS_DIR, 'system-logs.json');
-  let logs = [];
-  
-  if (fs.existsSync(logsFile)) {
-    try {
-      logs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
-    } catch (error) {
-      console.error('Erro ao ler logs:', error);
-    }
-  }
-  
-  logs.push(logEntry);
-  logs = logs.slice(-1000); // Manter apenas últimos 1000 logs
-  
-  fs.writeFileSync(logsFile, JSON.stringify(logs, null, 2));
-};
-
 // === ENDPOINTS DE CONFIGURAÇÃO ===
 
 // Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    environment: NODE_ENV,
-    version: '1.0.0'
-  });
+app.get('/api/health', async (req, res) => {
+  try {
+    // Testar conexão com banco
+    await db.query('SELECT 1');
+    
+    res.json({ 
+      status: 'ok', 
+      timestamp: new Date().toISOString(),
+      environment: NODE_ENV,
+      version: '1.0.0',
+      database: 'connected',
+      basePath: BASE_PATH
+    });
+  } catch (error) {
+    console.error('❌ Health check falhou:', error);
+    res.status(500).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      database: 'disconnected',
+      error: error.message
+    });
+  }
 });
 
 // Autenticação
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  const config = getConfig();
-  
-  if (!config || !config.users[username] || config.users[username] !== password) {
-    logAction('LOGIN_FAILED', { username, ip: req.ip });
-    return res.status(401).json({ error: 'Credenciais inválidas' });
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username e senha são obrigatórios' });
+    }
+    
+    const user = await db.getUser(username);
+    
+    if (!user || user.password !== password) {
+      await db.logAction('LOGIN_FAILED', { username }, username, req.ip);
+      return res.status(401).json({ error: 'Credenciais inválidas' });
+    }
+    
+    await db.logAction('LOGIN_SUCCESS', { username }, username, req.ip);
+    
+    res.json({ 
+      success: true, 
+      user: username,
+      permissions: user.permissions || {}
+    });
+  } catch (error) {
+    console.error('❌ Erro no login:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
   }
-  
-  logAction('LOGIN_SUCCESS', { username, ip: req.ip }, username);
-  
-  res.json({ 
-    success: true, 
-    user: username,
-    permissions: config.permissions[username] || {}
-  });
 });
 
 // Gerenciar usuários
-app.get('/api/users', (req, res) => {
-  const config = getConfig();
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  const users = Object.keys(config.users).map(username => ({
-    username,
-    permissions: config.permissions[username] || {}
-  }));
-  
-  res.json(users);
-});
-
-app.post('/api/users', (req, res) => {
-  const { username, password, permissions } = req.body;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  config.users[username] = password;
-  if (permissions) {
-    config.permissions[username] = permissions;
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = await db.getAllUsers();
+    res.json(users);
+  } catch (error) {
+    console.error('❌ Erro ao buscar usuários:', error);
+    res.status(500).json({ error: 'Erro ao carregar usuários' });
   }
-  
-  saveConfig(config);
-  logAction('USER_CREATED', { username }, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
 });
 
-app.delete('/api/users/:username', (req, res) => {
-  const { username } = req.params;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  delete config.users[username];
-  delete config.permissions[username];
-  
-  saveConfig(config);
-  logAction('USER_DELETED', { username }, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
+app.post('/api/users', async (req, res) => {
+  try {
+    const { username, password, permissions } = req.body;
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username e senha são obrigatórios' });
+    }
+    
+    // Verificar se usuário já existe
+    const existingUser = await db.getUser(username);
+    if (existingUser) {
+      return res.status(400).json({ error: 'Usuário já existe' });
+    }
+    
+    await db.createUser(username, password, permissions || {});
+    await db.logAction('USER_CREATED', { username }, req.headers['x-user'] || 'system');
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erro ao criar usuário:', error);
+    res.status(500).json({ error: 'Erro ao criar usuário' });
+  }
+});
+
+app.put('/api/users/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { password, permissions } = req.body;
+    
+    const updates = {};
+    if (password) updates.password = password;
+    if (permissions) updates.permissions = permissions;
+    
+    const success = await db.updateUser(username, updates);
+    if (!success) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    await db.logAction('USER_UPDATED', { username, updates: Object.keys(updates) }, req.headers['x-user'] || 'system');
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erro ao atualizar usuário:', error);
+    res.status(500).json({ error: 'Erro ao atualizar usuário' });
+  }
+});
+
+app.delete('/api/users/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    
+    if (username === 'administrador') {
+      return res.status(400).json({ error: 'Não é possível remover o administrador' });
+    }
+    
+    const success = await db.deleteUser(username);
+    if (!success) {
+      return res.status(404).json({ error: 'Usuário não encontrado' });
+    }
+    
+    await db.logAction('USER_DELETED', { username }, req.headers['x-user'] || 'system');
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erro ao deletar usuário:', error);
+    res.status(500).json({ error: 'Erro ao deletar usuário' });
+  }
 });
 
 // Personalizações
-app.get('/api/customizations', (req, res) => {
-  const config = getConfig();
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  res.json(config.customizations || {});
+app.get('/api/customizations', async (req, res) => {
+  try {
+    const customizations = await db.getConfig('customizations');
+    res.json(customizations || {
+      background: '',
+      logo: '',
+      favicon: '',
+      title: 'PAINEL DE CONTROLE',
+      subtitle: 'Sistema de Gerenciamento Docker'
+    });
+  } catch (error) {
+    console.error('❌ Erro ao buscar personalizações:', error);
+    res.status(500).json({ error: 'Erro ao carregar personalizações' });
+  }
 });
 
-app.post('/api/customizations', (req, res) => {
-  const customizations = req.body;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  config.customizations = { ...config.customizations, ...customizations };
-  saveConfig(config);
-  
-  logAction('CUSTOMIZATIONS_UPDATED', customizations, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
+app.post('/api/customizations', async (req, res) => {
+  try {
+    const customizations = req.body;
+    
+    await db.setConfig('customizations', customizations);
+    await db.logAction('CUSTOMIZATIONS_UPDATED', customizations, req.headers['x-user'] || 'system');
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erro ao salvar personalizações:', error);
+    res.status(500).json({ error: 'Erro ao salvar personalizações' });
+  }
 });
 
 // Variáveis do sistema
-app.get('/api/system-variables', (req, res) => {
-  const config = getConfig();
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  res.json(config.systemVariables || {});
+app.get('/api/system-variables', async (req, res) => {
+  try {
+    const variables = await db.getConfig('systemVariables');
+    res.json(variables || {});
+  } catch (error) {
+    console.error('❌ Erro ao buscar variáveis:', error);
+    res.status(500).json({ error: 'Erro ao carregar variáveis' });
+  }
 });
 
-app.post('/api/system-variables', (req, res) => {
-  const variables = req.body;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  config.systemVariables = variables;
-  saveConfig(config);
-  
-  logAction('SYSTEM_VARIABLES_UPDATED', variables, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
+app.post('/api/system-variables', async (req, res) => {
+  try {
+    const variables = req.body;
+    
+    await db.setConfig('systemVariables', variables);
+    await db.logAction('SYSTEM_VARIABLES_UPDATED', variables, req.headers['x-user'] || 'system');
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error('❌ Erro ao salvar variáveis:', error);
+    res.status(500).json({ error: 'Erro ao salvar variáveis' });
+  }
 });
 
 // Logs do sistema
-app.get('/api/logs', (req, res) => {
-  const logsFile = path.join(LOGS_DIR, 'system-logs.json');
-  
-  if (!fs.existsSync(logsFile)) {
-    return res.json([]);
-  }
-  
+app.get('/api/logs', async (req, res) => {
   try {
-    const logs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
-    res.json(logs.slice(-100)); // Últimos 100 logs
+    const logs = await db.getLogs(100);
+    res.json(logs);
   } catch (error) {
-    console.error('Erro ao ler logs:', error);
+    console.error('❌ Erro ao buscar logs:', error);
     res.status(500).json({ error: 'Erro ao carregar logs' });
   }
 });
 
 // Upload de scripts
-app.post('/api/upload-script', upload.single('script'), (req, res) => {
+app.post('/api/upload-script', upload.single('script'), async (req, res) => {
   if (!req.file) {
     return res.status(400).json({ error: 'Nenhum arquivo enviado' });
   }
@@ -286,7 +279,7 @@ app.post('/api/upload-script', upload.single('script'), (req, res) => {
       console.warn('Aviso: Não foi possível definir permissão de execução:', chmodError.message);
     }
     
-    logAction('SCRIPT_UPLOADED', { filename: req.file.originalname }, req.headers['x-user'] || 'system');
+    await db.logAction('SCRIPT_UPLOADED', { filename: req.file.originalname }, req.headers['x-user'] || 'system');
     
     res.json({ 
       success: true, 
@@ -300,7 +293,7 @@ app.post('/api/upload-script', upload.single('script'), (req, res) => {
 });
 
 // Listar scripts
-app.get('/api/scripts', (req, res) => {
+app.get('/api/scripts', async (req, res) => {
   try {
     if (!fs.existsSync(SCRIPTS_DIR)) {
       return res.json([]);
@@ -327,7 +320,7 @@ app.get('/api/scripts', (req, res) => {
 });
 
 // Executar comando/script
-app.post('/api/execute-command', (req, res) => {
+app.post('/api/execute-command', async (req, res) => {
   const { command, type } = req.body;
   
   if (!command) {
@@ -351,7 +344,7 @@ app.post('/api/execute-command', (req, res) => {
       maxBuffer: 1024 * 1024 * 10 // 10MB
     });
     
-    logAction('COMMAND_EXECUTED', { command: fullCommand, type }, req.headers['x-user'] || 'system');
+    await db.logAction('COMMAND_EXECUTED', { command: fullCommand, type }, req.headers['x-user'] || 'system');
     
     res.json({ 
       success: true, 
@@ -359,7 +352,7 @@ app.post('/api/execute-command', (req, res) => {
       command: fullCommand
     });
   } catch (error) {
-    logAction('COMMAND_FAILED', { command, error: error.message }, req.headers['x-user'] || 'system');
+    await db.logAction('COMMAND_FAILED', { command, error: error.message }, req.headers['x-user'] || 'system');
     
     res.status(500).json({ 
       error: error.message,
@@ -372,38 +365,48 @@ app.post('/api/execute-command', (req, res) => {
 // Middleware de erro global
 app.use((error, req, res, next) => {
   console.error('Erro não tratado:', error);
-  logAction('SERVER_ERROR', { error: error.message, stack: error.stack });
+  db.logAction('SERVER_ERROR', { error: error.message, stack: error.stack });
   res.status(500).json({ error: 'Erro interno do servidor' });
 });
 
 // Inicialização
-const startServer = () => {
-  createDirectories();
-  initializeDefaultConfig();
-  
-  console.log('🚀 Iniciando servidor backend...');
-  console.log(`📁 Diretório de dados: ${DATA_DIR}`);
-  console.log(`📁 Diretório de scripts: ${SCRIPTS_DIR}`);
-  console.log(`📁 Diretório de logs: ${LOGS_DIR}`);
-  console.log(`📁 Diretório de uploads: ${UPLOADS_DIR}`);
-  console.log(`🌍 Ambiente: ${NODE_ENV}`);
-  
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Servidor rodando na porta ${PORT}`);
-    logAction('SERVER_STARTED', { port: PORT, environment: NODE_ENV });
-  });
+const startServer = async () => {
+  try {
+    createDirectories();
+    
+    console.log('🗄️ Inicializando banco de dados...');
+    await db.initializeDatabase();
+    
+    console.log('🚀 Iniciando servidor backend...');
+    console.log(`📁 Diretório de dados: ${DATA_DIR}`);
+    console.log(`📁 Diretório de scripts: ${SCRIPTS_DIR}`);
+    console.log(`📁 Diretório de logs: ${LOGS_DIR}`);
+    console.log(`📁 Diretório de uploads: ${UPLOADS_DIR}`);
+    console.log(`🌍 Ambiente: ${NODE_ENV}`);
+    console.log(`🔗 Base Path: ${BASE_PATH}`);
+    
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`✅ Servidor rodando na porta ${PORT}`);
+      db.logAction('SERVER_STARTED', { port: PORT, environment: NODE_ENV, basePath: BASE_PATH });
+    });
+  } catch (error) {
+    console.error('❌ Erro ao iniciar servidor:', error);
+    process.exit(1);
+  }
 };
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
+process.on('SIGTERM', async () => {
   console.log('📤 Recebido SIGTERM, encerrando servidor...');
-  logAction('SERVER_SHUTDOWN', { signal: 'SIGTERM' });
+  await db.logAction('SERVER_SHUTDOWN', { signal: 'SIGTERM' });
+  await db.pool.end();
   process.exit(0);
 });
 
-process.on('SIGINT', () => {
+process.on('SIGINT', async () => {
   console.log('📤 Recebido SIGINT, encerrando servidor...');
-  logAction('SERVER_SHUTDOWN', { signal: 'SIGINT' });
+  await db.logAction('SERVER_SHUTDOWN', { signal: 'SIGINT' });
+  await db.pool.end();
   process.exit(0);
 });
 
