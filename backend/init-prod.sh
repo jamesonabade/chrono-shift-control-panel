@@ -19,6 +19,49 @@ warning() {
 # Verificar se é primeira execução
 FIRST_RUN_FILE="/app/data/.first_run_complete"
 
+log "🔧 Configurando variáveis de ambiente..."
+log "   • NODE_ENV: ${NODE_ENV:-production}"
+log "   • PORT: ${PORT:-3001}"
+log "   • DOMAIN: ${DOMAIN:-localhost}"
+log "   • BASE_PATH: ${BASE_PATH:-/}"
+log "   • DB_HOST: ${DB_HOST:-database}"
+log "   • DB_NAME: ${DB_NAME:-sistema_db}"
+log "   • DB_USER: ${DB_USER:-sistema_user}"
+
+# Aguardar banco de dados
+if [ ! -z "$DB_HOST" ]; then
+    log "🗄️ Aguardando banco de dados PostgreSQL..."
+    RETRY_COUNT=0
+    MAX_RETRIES=30
+    
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if pg_isready -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" > /dev/null 2>&1; then
+            log "✅ Banco de dados PostgreSQL está disponível"
+            break
+        else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            log "⏳ Tentativa $RETRY_COUNT/$MAX_RETRIES - Aguardando banco de dados..."
+            sleep 5
+        fi
+    done
+    
+    if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+        error "❌ Banco de dados não respondeu após $MAX_RETRIES tentativas"
+        exit 1
+    fi
+    
+    # Testar conexão com o banco
+    log "🔍 Testando conexão com o banco de dados..."
+    if PGPASSWORD="$DB_PASSWORD" psql -h "$DB_HOST" -p "${DB_PORT:-5432}" -U "$DB_USER" -d "$DB_NAME" -c "SELECT 1;" > /dev/null 2>&1; then
+        log "✅ Conexão com banco de dados estabelecida com sucesso"
+    else
+        error "❌ Falha na conexão com o banco de dados"
+        exit 1
+    fi
+else
+    log "ℹ️ Variáveis de banco de dados não configuradas, pulando verificação"
+fi
+
 # Aguardar um pouco para outros serviços iniciarem
 sleep 5
 
@@ -35,7 +78,7 @@ if [ ! -f "$FIRST_RUN_FILE" ]; then
     
     # Criar configuração inicial do sistema
     log "⚙️ Criando configuração inicial..."
-    cat > /app/data/system-config.json << 'EOJ'
+    cat > /app/data/system-config.json << EOF
 {
   "version": "1.0.0",
   "initialized": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)",
@@ -61,16 +104,16 @@ if [ ! -f "$FIRST_RUN_FILE" ]; then
   },
   "lastUpdated": "$(date -u +%Y-%m-%dT%H:%M:%S.%3NZ)"
 }
-EOJ
+EOF
     
     # Configurar logs iniciais
     log "📝 Configurando logs do sistema..."
-    cat > /app/logs/system.log << 'EOL'
+    cat > /app/logs/system.log << EOF
 [$(date '+%Y-%m-%d %H:%M:%S')] Sistema inicializado em produção
 [$(date '+%Y-%m-%d %H:%M:%S')] Domínio: ${DOMAIN:-localhost}
 [$(date '+%Y-%m-%d %H:%M:%S')] Base Path: ${BASE_PATH:-/}
 [$(date '+%Y-%m-%d %H:%M:%S')] Ambiente: ${NODE_ENV:-production}
-EOL
+EOF
     
     # Marcar primeira execução como concluída
     touch "$FIRST_RUN_FILE"
@@ -105,13 +148,16 @@ done
 # Exibir informações do sistema
 log "📊 Informações do sistema:"
 log "   • Hostname: $(hostname)"
+log "   • IP: $(hostname -i 2>/dev/null || echo 'N/A')"
 log "   • Ambiente: ${NODE_ENV:-development}"
 log "   • Porta: ${PORT:-3001}"
 log "   • Domínio: ${DOMAIN:-localhost}"
 log "   • Base Path: ${BASE_PATH:-/}"
 
+log "🏥 Configurando health check endpoint..."
+
 # Executar servidor
 log "🚀 Iniciando servidor Node.js..."
-log "Sistema pronto para uso em: ${DOMAIN:-localhost}${BASE_PATH:-}"
+log "Sistema backend pronto para uso em: ${DOMAIN:-localhost}${BASE_PATH:-}"
 
 exec node server.js

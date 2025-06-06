@@ -103,12 +103,12 @@ services:
 
   frontend:
     # Para usar imagem pré-construída, descomente a linha abaixo
-    # image: ${FRONTEND_IMAGE:-your-registry/sistema-frontend:latest}
+    image: ${FRONTEND_IMAGE:-registry.uesb.br/sig-testes/timeeventos-frontend:latest}
     
     # Para construir automaticamente do repositório Git
-    build:
-      context: https://github.com/${GITHUB_USER:-your-user}/${GITHUB_REPO:-your-repo}.git
-      dockerfile: Dockerfile.frontend.prod
+    # build:
+    #   context: https://github.com/${GITHUB_USER:-your-user}/${GITHUB_REPO:-your-repo}.git
+    #   dockerfile: Dockerfile.frontend.prod
     
     expose:
       - "8080"
@@ -127,20 +127,23 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
+    depends_on:
+      backend:
+        condition: service_healthy
 
   backend:
     # Para usar imagem pré-construída, descomente a linha abaixo
-    # image: ${BACKEND_IMAGE:-your-registry/sistema-backend:latest}
+    image: ${BACKEND_IMAGE:-registry.uesb.br/sig-testes/timeeventos-backend:latest}
     
     # Para construir automaticamente do repositório Git
-    build:
-      context: https://github.com/${GITHUB_USER:-your-user}/${GITHUB_REPO:-your-repo}.git#main:backend
-      dockerfile: Dockerfile.prod
+    # build:
+    #   context: https://github.com/${GITHUB_USER:-your-user}/${GITHUB_REPO:-your-repo}.git#main:backend
+    #   dockerfile: Dockerfile.prod
     
     expose:
       - "3001"
@@ -187,7 +190,8 @@ services:
     privileged: true
     user: root
     depends_on:
-      - database
+      database:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health", "||", "exit", "1"]
       interval: 30s
