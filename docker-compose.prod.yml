@@ -2,11 +2,35 @@
 version: '3.8'
 
 services:
+  database:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-sistema_db}
+      - POSTGRES_USER=${POSTGRES_USER:-sistema_user}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sistema_password_123}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    networks:
+      - app-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sistema_user} -d ${POSTGRES_DB:-sistema_db}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
   nginx:
     image: nginx:alpine
     ports:
-      - "80:80"
-      - "443:443"
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
     volumes:
       - nginx_config:/etc/nginx/conf.d
       - ssl_certs:/etc/nginx/ssl:ro
@@ -78,12 +102,14 @@ services:
       "
 
   frontend:
-    # Use uma imagem pré-construída ou construa a partir do repositório
-    image: ${FRONTEND_IMAGE:-your-registry/sistema-frontend:latest}
-    # Se quiser construir a partir do repo, descomente as linhas abaixo:
-    # build:
-    #   context: https://github.com/seu-usuario/seu-repo.git
-    #   dockerfile: Dockerfile.frontend.prod
+    # Para usar imagem pré-construída, descomente a linha abaixo
+    # image: ${FRONTEND_IMAGE:-your-registry/sistema-frontend:latest}
+    
+    # Para construir automaticamente do repositório Git
+    build:
+      context: https://github.com/${GITHUB_USER:-your-user}/${GITHUB_REPO:-your-repo}.git
+      dockerfile: Dockerfile.frontend.prod
+    
     expose:
       - "8080"
     environment:
@@ -108,12 +134,14 @@ services:
       start_period: 40s
 
   backend:
-    # Use uma imagem pré-construída ou construa a partir do repositório
-    image: ${BACKEND_IMAGE:-your-registry/sistema-backend:latest}
-    # Se quiser construir a partir do repo, descomente as linhas abaixo:
-    # build:
-    #   context: https://github.com/seu-usuario/seu-repo.git#main:backend
-    #   dockerfile: Dockerfile.prod
+    # Para usar imagem pré-construída, descomente a linha abaixo
+    # image: ${BACKEND_IMAGE:-your-registry/sistema-backend:latest}
+    
+    # Para construir automaticamente do repositório Git
+    build:
+      context: https://github.com/${GITHUB_USER:-your-user}/${GITHUB_REPO:-your-repo}.git#main:backend
+      dockerfile: Dockerfile.prod
+    
     expose:
       - "3001"
     volumes:
@@ -134,6 +162,12 @@ services:
       # Configurações de contexto
       - BASE_PATH=${BASE_PATH:-}
       - DOMAIN=${DOMAIN:-localhost}
+      # Configurações de banco de dados
+      - DB_HOST=database
+      - DB_PORT=5432
+      - DB_NAME=${POSTGRES_DB:-sistema_db}
+      - DB_USER=${POSTGRES_USER:-sistema_user}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-sistema_password_123}
       # Configurações de segurança
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - USER_PASSWORD=${USER_PASSWORD:-user123}
@@ -152,6 +186,8 @@ services:
         max-file: "3"
     privileged: true
     user: root
+    depends_on:
+      - database
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health", "||", "exit", "1"]
       interval: 30s
@@ -176,6 +212,10 @@ volumes:
   app_uploads:
     driver: local
     name: sistema_uploads_${STACK_NAME:-default}
+  
+  db_data:
+    driver: local
+    name: sistema_db_${STACK_NAME:-default}
   
   nginx_config:
     driver: local
@@ -208,3 +248,6 @@ secrets:
   jwt_secret:
     external: true
     name: sistema_jwt_secret_${STACK_NAME:-default}
+  db_password:
+    external: true
+    name: sistema_db_password_${STACK_NAME:-default}
