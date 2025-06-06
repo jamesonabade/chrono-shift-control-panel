@@ -9,20 +9,20 @@ Este documento explica como construir e preparar imagens Docker para deploy em p
 
 ```bash
 # Na raiz do projeto
-docker build -f Dockerfile.frontend.prod -t meu-registry/sistema-frontend:latest .
+docker build -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
 
 # Para fazer push para registry
-docker push meu-registry/sistema-frontend:latest
+docker push registry.uesb.br/sig-testes/timeeventos-frontend:latest
 ```
 
 ### Imagem do Backend
 
 ```bash
-# Na raiz do projeto (não na pasta backend/)
-docker build -f backend/Dockerfile.prod -t meu-registry/sistema-backend:latest ./backend
+# Na raiz do projeto (o contexto deve ser ./backend)
+docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest ./backend
 
 # Para fazer push para registry
-docker push meu-registry/sistema-backend:latest
+docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
 ```
 
 ## 🚀 Opções de Deploy no Portainer
@@ -54,35 +54,34 @@ docker push meu-registry/sistema-backend:latest
 1. Construa e publique as imagens (comandos acima)
 2. Configure no `.env`:
    ```env
-   FRONTEND_IMAGE=meu-registry/sistema-frontend:latest
-   BACKEND_IMAGE=meu-registry/sistema-backend:latest
+   FRONTEND_IMAGE=registry.uesb.br/sig-testes/timeeventos-frontend:latest
+   BACKEND_IMAGE=registry.uesb.br/sig-testes/timeeventos-backend:latest
    ```
 3. No `docker-compose.prod.yml`, comente as seções `build:` e descomente as linhas `image:`
 
 ## 📋 Preparação para Produção
 
-### 1. Configuração do Registry
+### 1. Teste Local
 
-Se usar registry privado:
+Teste as imagens localmente antes do deploy:
+
 ```bash
-# Login no registry
-docker login meu-registry.com
+# Teste do frontend
+docker run -p 8080:8080 registry.uesb.br/sig-testes/timeeventos-frontend:latest
 
-# Tag das imagens
-docker tag sistema-frontend meu-registry.com/sistema-frontend:v1.0.0
-docker tag sistema-backend meu-registry.com/sistema-backend:v1.0.0
-
-# Push das imagens
-docker push meu-registry.com/sistema-frontend:v1.0.0
-docker push meu-registry.com/sistema-backend:v1.0.0
+# Teste do backend (precisará de variáveis de ambiente)
+docker run -p 3001:3001 \
+  -e NODE_ENV=production \
+  -e DOMAIN=localhost \
+  registry.uesb.br/sig-testes/timeeventos-backend:latest
 ```
 
 ### 2. Configuração de Versões
 
 Para controle de versões:
 ```env
-FRONTEND_IMAGE=meu-registry/sistema-frontend:v1.0.0
-BACKEND_IMAGE=meu-registry/sistema-backend:v1.0.0
+FRONTEND_IMAGE=registry.uesb.br/sig-testes/timeeventos-frontend:v1.0.0
+BACKEND_IMAGE=registry.uesb.br/sig-testes/timeeventos-backend:v1.0.0
 ```
 
 ### 3. Multi-arch (ARM64 + AMD64)
@@ -95,13 +94,13 @@ docker buildx create --name multiarch --use
 # Build multi-arch do frontend
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f Dockerfile.frontend.prod \
-  -t meu-registry/sistema-frontend:latest \
+  -t registry.uesb.br/sig-testes/timeeventos-frontend:latest \
   --push .
 
 # Build multi-arch do backend
 docker buildx build --platform linux/amd64,linux/arm64 \
   -f backend/Dockerfile.prod \
-  -t meu-registry/sistema-backend:latest \
+  -t registry.uesb.br/sig-testes/timeeventos-backend:latest \
   --push ./backend
 ```
 
@@ -131,9 +130,9 @@ jobs:
     - name: Login to Registry
       uses: docker/login-action@v2
       with:
-        registry: ghcr.io
-        username: ${{ github.actor }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        registry: registry.uesb.br
+        username: ${{ secrets.REGISTRY_USERNAME }}
+        password: ${{ secrets.REGISTRY_PASSWORD }}
     
     - name: Build and push Frontend
       uses: docker/build-push-action@v4
@@ -141,7 +140,7 @@ jobs:
         context: .
         file: ./Dockerfile.frontend.prod
         push: true
-        tags: ghcr.io/${{ github.repository }}/frontend:latest
+        tags: registry.uesb.br/sig-testes/timeeventos-frontend:latest
         platforms: linux/amd64,linux/arm64
     
     - name: Build and push Backend
@@ -150,7 +149,7 @@ jobs:
         context: ./backend
         file: ./backend/Dockerfile.prod
         push: true
-        tags: ghcr.io/${{ github.repository }}/backend:latest
+        tags: registry.uesb.br/sig-testes/timeeventos-backend:latest
         platforms: linux/amd64,linux/arm64
 ```
 
@@ -180,18 +179,21 @@ jobs:
 - [ ] Monitoramento configurado
 - [ ] SSL/HTTPS configurado (se necessário)
 
-## 🛠️ Comandos Corrigidos
+## 🛠️ Comandos Corretos
 
 ### Frontend
 ```bash
 # Na raiz do projeto
-docker build -f Dockerfile.frontend.prod -t meu-registry/sistema-frontend:latest .
+docker build -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
 ```
 
 ### Backend
 ```bash
-# Na raiz do projeto (contexto correto)
-docker build -f backend/Dockerfile.prod -t meu-registry/sistema-backend:latest ./backend
+# Na raiz do projeto (contexto correto para o backend)
+docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest ./backend
 ```
 
-**Importante:** Note que o comando do backend usa `./backend` como contexto, não apenas `.` - isso garante que todos os arquivos necessários estejam disponíveis durante o build.
+**Importante:** 
+- O arquivo `nginx-frontend.conf` deve estar na raiz do projeto
+- O arquivo `backend/init-prod.sh` deve estar na pasta backend
+- O contexto do build do backend é `./backend`, não `.`
