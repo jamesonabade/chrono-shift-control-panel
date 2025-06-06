@@ -79,14 +79,17 @@ echo.
 :: Determinar URLs corretas baseadas no contexto
 if "!BASE_PATH!"=="/" (
     set API_URL=https://!DOMAIN!/api
+    set PUBLIC_URL=https://!DOMAIN!
 ) else (
     set API_URL=https://!DOMAIN!!BASE_PATH!/api
+    set PUBLIC_URL=https://!DOMAIN!!BASE_PATH!
 )
 
 :: Criar arquivo .env.production
 (
 echo VITE_API_URL=!API_URL!
 echo VITE_BASE_PATH=!BASE_PATH!
+echo VITE_PUBLIC_URL=!PUBLIC_URL!
 echo NODE_ENV=production
 echo DOMAIN=!DOMAIN!
 ) > .env.production
@@ -94,6 +97,7 @@ echo DOMAIN=!DOMAIN!
 echo Arquivo .env.production criado com sucesso!
 echo   VITE_API_URL=!API_URL!
 echo   VITE_BASE_PATH=!BASE_PATH!
+echo   VITE_PUBLIC_URL=!PUBLIC_URL!
 echo.
 
 :: Build do Frontend com tratamento de erro
@@ -146,6 +150,20 @@ if /i "!PUSH_CHOICE!"=="s" (
 )
 
 echo.
+echo ===========================================
+echo INSTRUÇÕES DE DEPLOY:
+echo ===========================================
+echo 1. Após o push, use as imagens:
+echo    Frontend: !IMAGE_NAME!-frontend:!TAG!
+echo    Backend: !IMAGE_NAME!-backend:!TAG!
+echo.
+echo 2. Configure o nginx para:
+echo    Domínio: !DOMAIN!
+echo    Contexto: !BASE_PATH!
+echo.
+echo 3. As aplicações estão configuradas para:
+echo    Frontend: !PUBLIC_URL!
+echo    API: !API_URL!
 echo ===========================================
 echo Script finalizado!
 echo ===========================================

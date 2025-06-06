@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +7,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Upload, Download, FileText, Trash2, Eye, Calendar, Database, Terminal, Play, Edit, Save, X } from 'lucide-react';
+import { getApiEndpoint } from '@/utils/apiEndpoints';
 
 interface UploadedScript {
   name: string;
@@ -34,7 +34,10 @@ const ScriptUpload = () => {
 
   const loadUploadedScripts = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/scripts');
+      const scriptsUrl = getApiEndpoint('/api/scripts');
+      console.log('🔄 Carregando scripts:', scriptsUrl);
+      
+      const response = await fetch(scriptsUrl);
       if (response.ok) {
         const scripts = await response.json();
         setUploadedScripts(scripts);
@@ -43,7 +46,7 @@ const ScriptUpload = () => {
       console.error('Erro ao carregar scripts:', error);
       toast({
         title: "Erro de conexão",
-        description: `Não foi possível conectar ao servidor (http://localhost:3001/api/scripts)`,
+        description: `Não foi possível conectar ao servidor para carregar scripts`,
         variant: "destructive"
       });
     }
@@ -77,7 +80,10 @@ const ScriptUpload = () => {
         formData.append('script', file);
         formData.append('type', selectedType);
 
-        const response = await fetch('http://localhost:3001/api/upload-script', {
+        const uploadUrl = getApiEndpoint('/api/upload-script');
+        console.log('📤 Enviando script:', uploadUrl);
+
+        const response = await fetch(uploadUrl, {
           method: 'POST',
           body: formData
         });
@@ -119,54 +125,12 @@ const ScriptUpload = () => {
     if (fileInput) fileInput.value = '';
   };
 
-  const handleFileUpload = async (file: File, type: 'date' | 'database' | 'custom') => {
-    if (!file.name.endsWith('.sh') && !file.name.endsWith('.bash')) {
-      toast({
-        title: "Erro",
-        description: "Por favor, selecione um arquivo .sh ou .bash",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const formData = new FormData();
-      formData.append('script', file);
-      formData.append('type', type);
-
-      const response = await fetch('http://localhost:3001/api/upload-script', {
-        method: 'POST',
-        body: formData
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-        console.log('Script salvo no servidor:', result.path);
-        
-        toast({
-          title: "Script enviado!",
-          description: `${file.name} foi salvo em /app/scripts/`,
-        });
-
-        // Recarrega a lista
-        await loadUploadedScripts();
-      } else {
-        throw new Error('Falha no upload do script');
-      }
-
-    } catch (error) {
-      console.error('Erro no upload:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao fazer upload do script",
-        variant: "destructive"
-      });
-    }
-  };
-
   const handleDownload = async (script: UploadedScript) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/download-script/${script.name}`);
+      const downloadUrl = getApiEndpoint(`/api/download-script/${script.name}`);
+      console.log('⬇️ Baixando script:', downloadUrl);
+      
+      const response = await fetch(downloadUrl);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -197,7 +161,10 @@ const ScriptUpload = () => {
 
   const handleDelete = async (script: UploadedScript) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/delete-script/${script.name}`, {
+      const deleteUrl = getApiEndpoint(`/api/delete-script/${script.name}`);
+      console.log('🗑️ Removendo script:', deleteUrl);
+      
+      const response = await fetch(deleteUrl, {
         method: 'DELETE'
       });
 
@@ -224,7 +191,10 @@ const ScriptUpload = () => {
 
   const handleExecute = async (script: UploadedScript) => {
     try {
-      const response = await fetch('http://localhost:3001/api/execute-script', {
+      const executeUrl = getApiEndpoint('/api/execute-script');
+      console.log('▶️ Executando script:', executeUrl);
+      
+      const response = await fetch(executeUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -261,7 +231,10 @@ const ScriptUpload = () => {
 
   const handlePreview = async (script: UploadedScript) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/preview-script/${script.name}`);
+      const previewUrl = getApiEndpoint(`/api/preview-script/${script.name}`);
+      console.log('👁️ Visualizando script:', previewUrl);
+      
+      const response = await fetch(previewUrl);
       if (response.ok) {
         const result = await response.json();
         setPreviewContent(result.content);
@@ -287,7 +260,10 @@ const ScriptUpload = () => {
 
   const handleEdit = async (script: UploadedScript) => {
     try {
-      const response = await fetch(`http://localhost:3001/api/preview-script/${script.name}`);
+      const editUrl = getApiEndpoint(`/api/preview-script/${script.name}`);
+      console.log('✏️ Editando script:', editUrl);
+      
+      const response = await fetch(editUrl);
       if (response.ok) {
         const result = await response.json();
         setEditContent(result.content);
@@ -315,7 +291,10 @@ const ScriptUpload = () => {
       formData.append('script', file);
       formData.append('type', editFileName.toLowerCase().includes('date') || editFileName.toLowerCase().includes('data') ? 'date' : 'database');
 
-      const response = await fetch('http://localhost:3001/api/upload-script', {
+      const saveUrl = getApiEndpoint('/api/upload-script');
+      console.log('💾 Salvando alterações:', saveUrl);
+
+      const response = await fetch(saveUrl, {
         method: 'POST',
         body: formData
       });
