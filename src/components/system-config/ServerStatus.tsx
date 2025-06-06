@@ -13,29 +13,29 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
   const getServerUrl = () => {
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
+    const port = window.location.port;
     
     console.log('Hostname atual:', hostname);
     console.log('Protocolo:', protocol);
-    console.log('Porta atual:', window.location.port);
+    console.log('Porta atual:', port);
     
-    // Em desenvolvimento local
+    // Em desenvolvimento local direto (sem nginx)
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      // Se estivermos na porta 8080, backend está em 3001
-      if (window.location.port === '8080') {
+      // Se estivermos na porta 8080 (frontend direto), backend está em 3001
+      if (port === '8080') {
         return 'http://localhost:3001';
       }
-      // Se estivermos na porta 3000 ou outra, tentar 3001
+      // Se estivermos na porta 80 ou sem porta (através do nginx), usar mesma origem
+      if (port === '80' || port === '') {
+        return `${protocol}//${hostname}`;
+      }
+      // Fallback para desenvolvimento
       return 'http://localhost:3001';
     }
     
-    // Em Docker ou produção
-    const basePath = import.meta.env.VITE_BASE_PATH || '';
-    if (basePath && basePath !== '/') {
-      return `${protocol}//${hostname}${basePath}`;
-    }
-    
-    // Fallback para mesma origem
-    return `${protocol}//${hostname}`;
+    // Em produção ou através do nginx (qualquer outro hostname)
+    // Usar sempre a mesma origem, pois o nginx faz o proxy
+    return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
   };
 
   const checkServerStatus = async () => {
@@ -52,7 +52,7 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
     
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      const timeoutId = setTimeout(() => controller.abort(), 10000);
       
       const response = await fetch(currentHealthUrl, {
         method: 'GET',
@@ -76,14 +76,13 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
     } catch (error) {
       console.log('Erro na verificação:', error);
       
-      // Se estamos em localhost, tentar várias portas
+      // Se estamos em localhost, tentar fallback apenas se não conseguir conectar através do nginx
       if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-        const ports = ['3001', '3000', '8080'];
-        
-        for (const port of ports) {
+        // Só tentar fallback se estivermos na porta 80 ou sem porta (nginx)
+        if (window.location.port === '80' || window.location.port === '') {
           try {
-            const fallbackUrl = `http://localhost:${port}/api/health`;
-            console.log('Tentando fallback:', fallbackUrl);
+            const fallbackUrl = 'http://localhost:3001/api/health';
+            console.log('Tentando fallback direto ao backend:', fallbackUrl);
             
             const fallbackResponse = await fetch(fallbackUrl, {
               method: 'GET',
@@ -94,15 +93,15 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
             
             if (fallbackResponse.ok) {
               const data = await fallbackResponse.json();
-              console.log(`Servidor online (localhost:${port})`, data);
-              setServerUrl(`http://localhost:${port}`);
+              console.log('Servidor online (fallback direto)', data);
+              setServerUrl('http://localhost:3001');
               setHealthCheckUrl(fallbackUrl);
               setServerStatus('online');
               onStatusChange(true, 'online');
               return;
             }
           } catch (localError) {
-            console.log(`Erro no fallback localhost:${port}:`, localError);
+            console.log('Erro no fallback direto:', localError);
           }
         }
       }
@@ -135,6 +134,8 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
       <div className="text-xs text-slate-400 space-y-1">
         <div>Backend: <span className="text-cyan-400">{serverUrl || 'Detectando...'}</span></div>
         <div>Health Check: <span className="text-cyan-400">{healthCheckUrl || 'Detectando...'}</span></div>
+        <div>Hostname: <span className="text-cyan-400">{window.location.hostname}</span></div>
+        <div>Porta: <span className="text-cyan-400">{window.location.port || '80/443'}</span></div>
       </div>
     </div>
   );

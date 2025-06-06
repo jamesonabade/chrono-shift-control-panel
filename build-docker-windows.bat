@@ -51,6 +51,14 @@ if /i "!USE_SAVED!"=="s" (
     set /p BASE_PATH="Digite o caminho base da aplicação (ex: /scripts ou deixe vazio para /): "
     if "!BASE_PATH!"=="" set BASE_PATH=/
 
+    :: Normalizar BASE_PATH
+    if not "!BASE_PATH!"=="/" (
+        :: Garantir que comece com /
+        if not "!BASE_PATH:~0,1!"=="/" set BASE_PATH=/!BASE_PATH!
+        :: Remover / do final se existir
+        if "!BASE_PATH:~-1!"=="/" set BASE_PATH=!BASE_PATH:~0,-1!
+    )
+
     :: Salvar configuração para próxima vez
     echo IMAGE_NAME=!IMAGE_NAME! > %CONFIG_FILE%
     echo TAG=!TAG! >> %CONFIG_FILE%
@@ -68,15 +76,24 @@ echo   Caminho: !BASE_PATH!
 echo ===========================================
 echo.
 
+:: Determinar URLs corretas baseadas no contexto
+if "!BASE_PATH!"=="/" (
+    set API_URL=https://!DOMAIN!/api
+) else (
+    set API_URL=https://!DOMAIN!!BASE_PATH!/api
+)
+
 :: Criar arquivo .env.production
 (
-echo VITE_API_URL=https://!DOMAIN!!BASE_PATH!api
+echo VITE_API_URL=!API_URL!
 echo VITE_BASE_PATH=!BASE_PATH!
 echo NODE_ENV=production
 echo DOMAIN=!DOMAIN!
 ) > .env.production
 
 echo Arquivo .env.production criado com sucesso!
+echo   VITE_API_URL=!API_URL!
+echo   VITE_BASE_PATH=!BASE_PATH!
 echo.
 
 :: Build do Frontend com tratamento de erro

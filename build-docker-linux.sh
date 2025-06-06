@@ -51,6 +51,16 @@ else
         BASE_PATH="/"
     fi
 
+    # Normalizar BASE_PATH
+    if [ "$BASE_PATH" != "/" ]; then
+        # Garantir que comece com /
+        if [[ ! "$BASE_PATH" =~ ^/ ]]; then
+            BASE_PATH="/$BASE_PATH"
+        fi
+        # Garantir que não termine com /
+        BASE_PATH=$(echo "$BASE_PATH" | sed 's/\/$//')
+    fi
+
     # Salvar configuração para próxima vez
     cat > "$CONFIG_FILE" << EOF
 IMAGE_NAME="$IMAGE_NAME"
@@ -70,15 +80,24 @@ echo "  Caminho: $BASE_PATH"
 echo "==========================================="
 echo
 
+# Determinar URLs corretas baseadas no contexto
+if [ "$BASE_PATH" = "/" ]; then
+    API_URL="https://$DOMAIN/api"
+else
+    API_URL="https://$DOMAIN$BASE_PATH/api"
+fi
+
 # Criar arquivo .env.production
 cat > .env.production << EOF
-VITE_API_URL=https://$DOMAIN$BASE_PATH/api
+VITE_API_URL=$API_URL
 VITE_BASE_PATH=$BASE_PATH
 NODE_ENV=production
 DOMAIN=$DOMAIN
 EOF
 
 echo "Arquivo .env.production criado com sucesso!"
+echo "  VITE_API_URL=$API_URL"
+echo "  VITE_BASE_PATH=$BASE_PATH"
 echo
 
 # Build do Frontend com tratamento de erro
