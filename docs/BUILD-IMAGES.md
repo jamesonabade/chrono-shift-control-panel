@@ -18,9 +18,8 @@ docker push meu-registry/sistema-frontend:latest
 ### Imagem do Backend
 
 ```bash
-# Na pasta backend/
-cd backend
-docker build -f Dockerfile.prod -t meu-registry/sistema-backend:latest .
+# Na raiz do projeto (não na pasta backend/)
+docker build -f backend/Dockerfile.prod -t meu-registry/sistema-backend:latest ./backend
 
 # Para fazer push para registry
 docker push meu-registry/sistema-backend:latest
@@ -100,11 +99,10 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push .
 
 # Build multi-arch do backend
-cd backend
 docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.prod \
+  -f backend/Dockerfile.prod \
   -t meu-registry/sistema-backend:latest \
-  --push .
+  --push ./backend
 ```
 
 ## 🔄 Automação com GitHub Actions
@@ -181,3 +179,19 @@ jobs:
 - [ ] Volumes de backup planejados
 - [ ] Monitoramento configurado
 - [ ] SSL/HTTPS configurado (se necessário)
+
+## 🛠️ Comandos Corrigidos
+
+### Frontend
+```bash
+# Na raiz do projeto
+docker build -f Dockerfile.frontend.prod -t meu-registry/sistema-frontend:latest .
+```
+
+### Backend
+```bash
+# Na raiz do projeto (contexto correto)
+docker build -f backend/Dockerfile.prod -t meu-registry/sistema-backend:latest ./backend
+```
+
+**Importante:** Note que o comando do backend usa `./backend` como contexto, não apenas `.` - isso garante que todos os arquivos necessários estejam disponíveis durante o build.
