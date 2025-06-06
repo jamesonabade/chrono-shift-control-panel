@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -5,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { Eye, EyeOff, User, Lock, Globe } from 'lucide-react';
 import DateTime from '@/components/DateTime';
+import { getApiEndpoint } from '@/utils/apiEndpoints';
 
 interface LoginPageProps {
   onLogin: () => void;
@@ -18,141 +20,50 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
   const [logoImage, setLogoImage] = useState('');
   const [title, setTitle] = useState('PAINEL DE CONTROLE');
   const [subtitle, setSubtitle] = useState('Sistema de Gerenciamento Docker');
+  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
-    // Inicializar usuários padrão se não existirem
-    const defaultCredentials = {
-      'administrador': 'admin123',
-      'usuario': 'user123'
-    };
-
-    const savedCredentials = localStorage.getItem('userCredentials');
-    if (!savedCredentials) {
-      localStorage.setItem('userCredentials', JSON.stringify(defaultCredentials));
-    } else {
-      // Garantir que os usuários padrão existam
-      const credentials = JSON.parse(savedCredentials);
-      let updated = false;
-      
-      if (!credentials['administrador']) {
-        credentials['administrador'] = 'admin123';
-        updated = true;
-      }
-      
-      if (!credentials['usuario']) {
-        credentials['usuario'] = 'user123';
-        updated = true;
-      }
-      
-      if (updated) {
-        localStorage.setItem('userCredentials', JSON.stringify(credentials));
-      }
-    }
-
-    // Inicializar permissões padrão
-    const defaultPermissions = {
-      'usuario': {
-        date: true,
-        database: false,
-        scripts: true,
-        users: false,
-        logs: true
-      }
-    };
-
-    const savedPermissions = localStorage.getItem('userPermissions');
-    if (!savedPermissions) {
-      localStorage.setItem('userPermissions', JSON.stringify(defaultPermissions));
-    }
-
-    // Carregar personalizações do servidor
-    const loadCustomizations = async () => {
-      try {
-        const response = await fetch('http://localhost:3001/api/customizations');
-        if (response.ok) {
-          const customizations = await response.json();
-          if (customizations.background) setBackgroundImage(customizations.background);
-          if (customizations.logo) setLogoImage(customizations.logo);
-          if (customizations.title) setTitle(customizations.title);
-          if (customizations.subtitle) setSubtitle(customizations.subtitle);
-          if (customizations.favicon) {
-            const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
-            link.type = 'image/png';
-            link.rel = 'icon';
-            link.href = customizations.favicon;
-            document.getElementsByTagName('head')[0].appendChild(link);
-          }
-        } else {
-          // Fallback para localStorage se servidor não estiver disponível
-          const savedBackground = localStorage.getItem('loginBackground');
-          const savedLogo = localStorage.getItem('loginLogo');
-          const savedTitle = localStorage.getItem('loginTitle');
-          const savedSubtitle = localStorage.getItem('loginSubtitle');
-          
-          if (savedBackground) setBackgroundImage(savedBackground);
-          if (savedLogo) setLogoImage(savedLogo);
-          if (savedTitle) setTitle(savedTitle);
-          if (savedSubtitle) setSubtitle(savedSubtitle);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar personalizações:', error);
-        // Fallback para localStorage
-        const savedBackground = localStorage.getItem('loginBackground');
-        const savedLogo = localStorage.getItem('loginLogo');
-        const savedTitle = localStorage.getItem('loginTitle');
-        const savedSubtitle = localStorage.getItem('loginSubtitle');
-        
-        if (savedBackground) setBackgroundImage(savedBackground);
-        if (savedLogo) setLogoImage(savedLogo);
-        if (savedTitle) setTitle(savedTitle);
-        if (savedSubtitle) setSubtitle(savedSubtitle);
-      }
-    };
-
     loadCustomizations();
-
-    // Escutar mudanças nas personalizações
-    const handleStorageChange = (e: StorageEvent) => {
-      if (e.key === 'loginBackground') {
-        setBackgroundImage(e.newValue || '');
-      } else if (e.key === 'loginLogo') {
-        setLogoImage(e.newValue || '');
-      } else if (e.key === 'loginTitle') {
-        setTitle(e.newValue || 'PAINEL DE CONTROLE');
-      } else if (e.key === 'loginSubtitle') {
-        setSubtitle(e.newValue || 'Sistema de Gerenciamento Docker');
-      } else if (e.key === 'loginFavicon') {
-        const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement;
-        if (link) {
-          link.href = e.newValue || '/favicon.ico';
-        }
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
   }, []);
 
-  const logAction = (action: string, details: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      user: username || 'unknown'
-    };
-    
-    console.log('AUTH_LOG:', JSON.stringify(logEntry));
-    
-    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-    logs.push(logEntry);
-    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+  const loadCustomizations = async () => {
+    try {
+      const customizationsUrl = getApiEndpoint('/api/customizations');
+      console.log('🔄 Carregando personalizações do servidor:', customizationsUrl);
+      
+      const response = await fetch(customizationsUrl);
+      if (response.ok) {
+        const customizations = await response.json();
+        console.log('✅ Personalizações carregadas:', customizations);
+        
+        if (customizations.background) setBackgroundImage(customizations.background);
+        if (customizations.logo) setLogoImage(customizations.logo);
+        if (customizations.title) setTitle(customizations.title);
+        if (customizations.subtitle) setSubtitle(customizations.subtitle);
+        if (customizations.favicon) {
+          updateFavicon(customizations.favicon);
+        }
+        
+        // Atualizar título da página
+        document.title = customizations.title || 'PAINEL DE CONTROLE';
+      } else {
+        console.warn('❌ Servidor indisponível, usando configurações padrão');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao carregar personalizações:', error);
+    }
   };
 
-  const handleLogin = () => {
+  const updateFavicon = (faviconUrl: string) => {
+    const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link');
+    link.type = 'image/png';
+    link.rel = 'icon';
+    link.href = faviconUrl;
+    document.getElementsByTagName('head')[0].appendChild(link);
+  };
+
+  const handleLogin = async () => {
     if (!username || !password) {
       toast({
         title: "Erro",
@@ -162,27 +73,52 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       return;
     }
 
-    const credentials = JSON.parse(localStorage.getItem('userCredentials') || '{}');
+    setLoading(true);
     
-    if (credentials[username] && credentials[username] === password) {
-      localStorage.setItem('currentUser', username);
+    try {
+      const loginUrl = getApiEndpoint('/api/auth/login');
+      console.log('🔐 Tentando login:', loginUrl);
       
-      logAction('LOGIN_SUCCESS', { username });
-      
-      toast({
-        title: "Login realizado!",
-        description: `Bem-vindo, ${username}!`
+      const response = await fetch(loginUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password })
       });
-      
-      onLogin();
-    } else {
-      logAction('LOGIN_FAILED', { username, reason: 'Invalid credentials' });
-      
+
+      const data = await response.json();
+
+      if (response.ok && data.success) {
+        // Salvar dados do usuário
+        localStorage.setItem('currentUser', username);
+        localStorage.setItem('userPermissions', JSON.stringify(data.permissions || {}));
+        
+        console.log('✅ Login realizado com sucesso');
+        
+        toast({
+          title: "Login realizado!",
+          description: `Bem-vindo, ${username}!`
+        });
+        
+        onLogin();
+      } else {
+        console.warn('❌ Falha no login:', data.error);
+        toast({
+          title: "Erro de login",
+          description: data.error || "Usuário ou senha incorretos",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('❌ Erro de conexão:', error);
       toast({
-        title: "Erro de login",
-        description: "Usuário ou senha incorretos",
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor",
         variant: "destructive"
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -202,15 +138,12 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         backgroundRepeat: 'no-repeat'
       }}
     >
-      {/* Overlay escuro se houver imagem de fundo */}
       {backgroundImage && (
         <div className="absolute inset-0 bg-black/50"></div>
       )}
       
-      {/* Grid pattern overlay */}
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDU5LCAxMzAsIDI0NiwgMC4xKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
       
-      {/* Data e hora no canto superior direito */}
       <div className="absolute top-4 right-4 z-20">
         <DateTime className="text-white bg-slate-800/50 backdrop-blur-lg rounded-lg px-3 py-2" />
       </div>
@@ -253,6 +186,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 onKeyPress={handleKeyPress}
+                disabled={loading}
                 className="pl-10 bg-slate-700/50 border-slate-600 text-white placeholder-slate-400 focus:border-cyan-500"
               />
             </div>
@@ -267,11 +201,13 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 onKeyPress={handleKeyPress}
+                disabled={loading}
                 className="pl-10 pr-10 bg-slate-700/50 border-slate-600 text-white placeholder-slate-400 focus:border-cyan-500"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
+                disabled={loading}
                 className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-white"
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -281,9 +217,10 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           
           <Button 
             onClick={handleLogin}
+            disabled={loading}
             className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-medium py-2 transition-all duration-200"
           >
-            Entrar
+            {loading ? 'Entrando...' : 'Entrar'}
           </Button>
           
           <div className="text-center text-sm text-slate-400 mt-4">
