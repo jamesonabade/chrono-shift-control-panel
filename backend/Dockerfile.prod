@@ -52,7 +52,7 @@ RUN npm install --omit=dev
 COPY . .
 
 # Copiar e dar permissões ao script de inicialização
-COPY init-prod.sh /app/init.sh
+COPY backend/init-prod.sh /app/init.sh
 RUN chmod +x /app/init.sh
 
 # Dar permissões

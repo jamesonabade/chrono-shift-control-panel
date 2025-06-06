@@ -5,23 +5,29 @@ Este documento explica como construir e preparar imagens Docker para deploy em p
 
 ## 🏗️ Construindo as Imagens
 
-### Imagem do Frontend
+### Comando Correto para Frontend
 
 ```bash
 # Na raiz do projeto
 docker build -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
-
-# Para fazer push para registry
-docker push registry.uesb.br/sig-testes/timeeventos-frontend:latest
 ```
 
-### Imagem do Backend
+### Comando Correto para Backend
 
 ```bash
-# Na raiz do projeto (o contexto deve ser ./backend)
-docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest ./backend
+# Na raiz do projeto (importante: contexto deve ser a raiz)
+docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest .
+```
 
-# Para fazer push para registry
+**IMPORTANTE:** Note que o contexto do build do backend é `.` (raiz do projeto), não `./backend`. Isso é necessário porque o Dockerfile precisa acessar tanto os arquivos da pasta `backend/` quanto o arquivo `backend/init-prod.sh`.
+
+### Para fazer push para registry
+
+```bash
+# Push do frontend
+docker push registry.uesb.br/sig-testes/timeeventos-frontend:latest
+
+# Push do backend  
 docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
 ```
 
@@ -76,124 +82,74 @@ docker run -p 3001:3001 \
   registry.uesb.br/sig-testes/timeeventos-backend:latest
 ```
 
-### 2. Configuração de Versões
+### 2. Estrutura de Arquivos
 
-Para controle de versões:
-```env
-FRONTEND_IMAGE=registry.uesb.br/sig-testes/timeeventos-frontend:v1.0.0
-BACKEND_IMAGE=registry.uesb.br/sig-testes/timeeventos-backend:v1.0.0
+Para que o build funcione corretamente, certifique-se de que a estrutura está assim:
+
+```
+projeto/
+├── Dockerfile.frontend.prod          # Dockerfile do frontend
+├── nginx-frontend.conf               # Configuração do nginx
+├── backend/
+│   ├── Dockerfile.prod              # Dockerfile do backend
+│   ├── init-prod.sh                 # Script de inicialização
+│   ├── package.json
+│   └── ... (outros arquivos backend)
+├── src/
+├── package.json
+└── ... (outros arquivos frontend)
 ```
 
-### 3. Multi-arch (ARM64 + AMD64)
+## 🔧 Troubleshooting
 
-Para suporte a diferentes arquiteturas:
-```bash
-# Criar builder multi-arch
-docker buildx create --name multiarch --use
+### Erro: "init-prod.sh: not found"
 
-# Build multi-arch do frontend
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.frontend.prod \
-  -t registry.uesb.br/sig-testes/timeeventos-frontend:latest \
-  --push .
+**Causa:** O contexto do build está incorreto ou o arquivo não existe.
 
-# Build multi-arch do backend
-docker buildx build --platform linux/amd64,linux/arm64 \
-  -f backend/Dockerfile.prod \
-  -t registry.uesb.br/sig-testes/timeeventos-backend:latest \
-  --push ./backend
-```
+**Solução:** 
+1. Certifique-se que o arquivo `backend/init-prod.sh` existe
+2. Execute o build do backend a partir da raiz do projeto:
+   ```bash
+   docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest .
+   ```
 
-## 🔄 Automação com GitHub Actions
+### Erro: "nginx-frontend.conf: not found"
 
-Exemplo de workflow para build automático:
+**Causa:** O arquivo de configuração do nginx não está na raiz.
 
-```yaml
-# .github/workflows/build.yml
-name: Build and Push Images
+**Solução:**
+1. Certifique-se que o arquivo `nginx-frontend.conf` está na raiz do projeto
+2. Execute o build do frontend a partir da raiz:
+   ```bash
+   docker build -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
+   ```
 
-on:
-  push:
-    branches: [ main ]
-  release:
-    types: [ published ]
+### Erro: "vite: not found"
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v3
-    
-    - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v2
-    
-    - name: Login to Registry
-      uses: docker/login-action@v2
-      with:
-        registry: registry.uesb.br
-        username: ${{ secrets.REGISTRY_USERNAME }}
-        password: ${{ secrets.REGISTRY_PASSWORD }}
-    
-    - name: Build and push Frontend
-      uses: docker/build-push-action@v4
-      with:
-        context: .
-        file: ./Dockerfile.frontend.prod
-        push: true
-        tags: registry.uesb.br/sig-testes/timeeventos-frontend:latest
-        platforms: linux/amd64,linux/arm64
-    
-    - name: Build and push Backend
-      uses: docker/build-push-action@v4
-      with:
-        context: ./backend
-        file: ./backend/Dockerfile.prod
-        push: true
-        tags: registry.uesb.br/sig-testes/timeeventos-backend:latest
-        platforms: linux/amd64,linux/arm64
-```
+**Causa:** As dependências de desenvolvimento não foram instaladas.
 
-## 🎯 Qual Método Escolher?
+**Solução:** O Dockerfile já foi corrigido para usar `npm ci` que instala todas as dependências necessárias.
 
-### Use Build Automático se:
-- Quer simplicidade máxima
-- Sempre quer a versão mais recente
-- Não se importa com tempo de build inicial
-- Está testando ou em desenvolvimento
+## ✅ Checklist de Build
 
-### Use Imagens Pré-construídas se:
-- Quer controle total sobre versões
-- Deploy precisa ser muito rápido
-- Ambiente de produção crítico
-- Quer fazer rollback fácil entre versões
-- Tem pipeline de CI/CD configurado
-
-## ✅ Checklist de Deploy
-
+- [ ] Arquivo `nginx-frontend.conf` existe na raiz
+- [ ] Arquivo `backend/init-prod.sh` existe e tem permissões de execução
+- [ ] Comando de build do frontend usa contexto `.` (raiz)
+- [ ] Comando de build do backend usa contexto `.` (raiz) 
 - [ ] Imagens construídas e testadas
 - [ ] Registry configurado (se aplicável)
-- [ ] Variáveis de ambiente definidas
-- [ ] Senhas alteradas para produção
-- [ ] Banco de dados configurado
-- [ ] Volumes de backup planejados
-- [ ] Monitoramento configurado
-- [ ] SSL/HTTPS configurado (se necessário)
+- [ ] Push realizado com sucesso
 
-## 🛠️ Comandos Corretos
+## 🎯 Comandos Finais Corretos
 
-### Frontend
 ```bash
-# Na raiz do projeto
+# Frontend
 docker build -f Dockerfile.frontend.prod -t registry.uesb.br/sig-testes/timeeventos-frontend:latest .
-```
 
-### Backend
-```bash
-# Na raiz do projeto (contexto correto para o backend)
-docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest ./backend
-```
+# Backend  
+docker build -f backend/Dockerfile.prod -t registry.uesb.br/sig-testes/timeeventos-backend:latest .
 
-**Importante:** 
-- O arquivo `nginx-frontend.conf` deve estar na raiz do projeto
-- O arquivo `backend/init-prod.sh` deve estar na pasta backend
-- O contexto do build do backend é `./backend`, não `.`
+# Push
+docker push registry.uesb.br/sig-testes/timeeventos-frontend:latest
+docker push registry.uesb.br/sig-testes/timeeventos-backend:latest
+```
