@@ -1,5 +1,6 @@
 
 #!/bin/bash
+set -e
 
 echo "🚀 Iniciando configuração do sistema de produção..."
 
@@ -29,7 +30,7 @@ log "   • DB_NAME: ${DB_NAME:-sistema_db}"
 log "   • DB_USER: ${DB_USER:-sistema_user}"
 
 # Aguardar banco de dados
-if [ ! -z "$DB_HOST" ]; then
+if [ -n "$DB_HOST" ]; then
     log "🗄️ Aguardando banco de dados PostgreSQL..."
     RETRY_COUNT=0
     MAX_RETRIES=30

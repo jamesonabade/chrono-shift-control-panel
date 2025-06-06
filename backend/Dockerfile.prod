@@ -1,5 +1,5 @@
 
-FROM docker:25 AS docker-cli
+FROM docker:25-cli AS docker-cli
 
 FROM node:20-bookworm
 
@@ -55,16 +55,16 @@ COPY . .
 
 # Copiar e configurar script de inicialização
 COPY backend/init-prod.sh /app/init.sh
-RUN chmod +x /app/init.sh
 
-# Converter quebras de linha para formato Unix
-RUN dos2unix /app/init.sh 2>/dev/null || sed -i 's/\r$//' /app/init.sh
+# Converter quebras de linha e dar permissões
+RUN dos2unix /app/init.sh && \
+    chmod +x /app/init.sh
 
-# Dar permissões
-RUN chmod -R 755 /app/scripts 2>/dev/null || true
-RUN chmod -R 755 /app/logs 2>/dev/null || true
-RUN chmod -R 755 /app/data 2>/dev/null || true
-RUN chmod -R 755 /app/uploads 2>/dev/null || true
+# Dar permissões aos diretórios
+RUN chmod -R 755 /app/scripts 2>/dev/null || true && \
+    chmod -R 755 /app/logs 2>/dev/null || true && \
+    chmod -R 755 /app/data 2>/dev/null || true && \
+    chmod -R 755 /app/uploads 2>/dev/null || true
 
 # Expor porta
 EXPOSE 3001
@@ -73,5 +73,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3001/api/health || exit 1
 
-# Comando de entrada
-CMD ["/app/init.sh"]
+# Comando de entrada usando bash explicitamente
+CMD ["/bin/bash", "/app/init.sh"]

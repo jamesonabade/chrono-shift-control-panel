@@ -1,5 +1,5 @@
 
-FROM node:18-bookworm
+FROM node:20-bookworm
 
 # Configurar locale e timezone
 RUN apt-get update && apt-get install -y \
@@ -7,6 +7,7 @@ RUN apt-get update && apt-get install -y \
     tzdata \
     bash \
     curl \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -39,13 +40,13 @@ RUN npm ci
 COPY . .
 
 # Dar permissões aos scripts
-RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
-RUN chmod -R 755 /app/scripts 2>/dev/null || true
-RUN chmod -R 755 /app/logs 2>/dev/null || true
-RUN chmod -R 755 /app/data 2>/dev/null || true
+RUN chmod +x /app/scripts/*.sh 2>/dev/null || true && \
+    chmod -R 755 /app/scripts 2>/dev/null || true && \
+    chmod -R 755 /app/logs 2>/dev/null || true && \
+    chmod -R 755 /app/data 2>/dev/null || true
 
 # Expor porta
 EXPOSE 8080
 
 # Comando para desenvolvimento
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/bin/bash", "-c", "npm run dev -- --host 0.0.0.0 --port 8080"]
