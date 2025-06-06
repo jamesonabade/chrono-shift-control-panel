@@ -4,6 +4,7 @@ import { Settings } from 'lucide-react';
 import { ServerStatus } from './system-config/ServerStatus';
 import { CustomizationsPanel } from './system-config/CustomizationsPanel';
 import { SystemVariablesPanel } from './system-config/SystemVariablesPanel';
+import { getApiEndpoint } from '@/utils/apiEndpoints';
 
 const SystemConfiguration = () => {
   const [isServerAvailable, setIsServerAvailable] = useState(false);
@@ -14,29 +15,21 @@ const SystemConfiguration = () => {
     setServerStatus(status);
   };
 
-  const getServerUrl = () => {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-    
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      return 'http://localhost:3001';
-    }
-    
-    const basePath = import.meta.env.VITE_BASE_PATH || '';
-    return `${protocol}//${hostname}${basePath !== '/' ? basePath : ''}`;
-  };
-
   const loadCustomizations = async () => {
     try {
       if (isServerAvailable) {
-        const response = await fetch(`${getServerUrl()}/api/customizations`);
+        const customizationsUrl = getApiEndpoint('/api/customizations');
+        console.log('🔄 Carregando personalizações:', customizationsUrl);
+        
+        const response = await fetch(customizationsUrl);
         if (response.ok) {
           const data = await response.json();
+          console.log('✅ Personalizações carregadas:', data);
           // Handle customizations loading if needed
         }
       }
     } catch (error) {
-      console.error('Erro ao carregar personalizações:', error);
+      console.error('❌ Erro ao carregar personalizações:', error);
     }
   };
 

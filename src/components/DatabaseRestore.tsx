@@ -1,34 +1,16 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Database, Play } from 'lucide-react';
+import { Database } from 'lucide-react';
+import { getApiEndpoint } from '@/utils/apiEndpoints';
 
 const DatabaseRestore = () => {
   const [environment, setEnvironment] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
-
-  const getServerUrl = () => {
-    const hostname = window.location.hostname;
-    const protocol = window.location.protocol;
-    
-    // Em desenvolvimento local
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      if (window.location.port === '8080') {
-        return 'http://localhost:3001';
-      }
-    }
-    
-    // Em Docker ou produção
-    const basePath = import.meta.env.VITE_BASE_PATH || '';
-    if (basePath && basePath !== '/') {
-      return `${protocol}//${hostname}${basePath}`;
-    }
-    
-    return `${protocol}//${hostname}`;
-  };
 
   // Carregar último estado salvo
   useEffect(() => {
@@ -78,10 +60,10 @@ const DatabaseRestore = () => {
 
       console.log('Variáveis de ambiente para execução:', envVariables);
 
-      // Executar todos os comandos vinculados
+      // Executar todos os comandos vinculados usando o novo utilitário de endpoints
       let allSuccess = true;
-      const serverUrl = getServerUrl();
-      console.log('URL do servidor para execução:', `${serverUrl}/api/execute-command`);
+      const executeUrl = getApiEndpoint('/api/execute-command');
+      console.log('🚀 URL de execução:', executeUrl);
       
       for (const commandId of databaseCommands) {
         const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');
@@ -90,7 +72,7 @@ const DatabaseRestore = () => {
         if (command) {
           console.log('Executando comando:', command);
           
-          const response = await fetch(`${serverUrl}/api/execute-command`, {
+          const response = await fetch(executeUrl, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
