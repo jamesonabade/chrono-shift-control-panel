@@ -1,6 +1,6 @@
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { authApi } from '@/lib/api';
+import { authApi, serverApi } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
 
 interface User {
@@ -40,10 +40,35 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
 
+  const checkServerConnection = async () => {
+    try {
+      console.log('🔍 Verificando conexão com servidor...');
+      await serverApi.getServerTime();
+      console.log('✅ Servidor conectado');
+      return true;
+    } catch (error) {
+      console.error('❌ Erro de conexão com servidor:', error);
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   const checkAuth = async () => {
     try {
+      // Primeiro verificar se o servidor está online
+      const serverOnline = await checkServerConnection();
+      if (!serverOnline) {
+        setIsLoading(false);
+        return;
+      }
+
       const token = localStorage.getItem('authToken');
       if (!token) {
+        console.log('🔍 Nenhum token encontrado');
         setIsLoading(false);
         return;
       }
@@ -56,13 +81,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         setUser(response.data.data.user);
         console.log('👤 Usuário autenticado:', response.data.data.user);
       } else {
+        console.log('❌ Token inválido, removendo...');
         localStorage.removeItem('authToken');
-        localStorage.removeItem('currentUser');
       }
     } catch (error) {
       console.error('❌ Erro na verificação de auth:', error);
       localStorage.removeItem('authToken');
-      localStorage.removeItem('currentUser');
+      toast({
+        title: "Erro de autenticação",
+        description: "Sessão expirada, faça login novamente",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -73,6 +102,12 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       setIsLoading(true);
       console.log('🔐 Tentando fazer login com:', { email, password: '***' });
       
+      // Verificar conexão primeiro
+      const serverOnline = await checkServerConnection();
+      if (!serverOnline) {
+        return false;
+      }
+      
       const response = await authApi.login(email, password);
       console.log('📡 Resposta do login:', response.data);
       
@@ -80,7 +115,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const { token, user: userData } = response.data.data;
         
         localStorage.setItem('authToken', token);
-        localStorage.setItem('currentUser', JSON.stringify(userData));
         setUser(userData);
         
         console.log('✅ Login realizado com sucesso:', userData);
@@ -102,9 +136,17 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       }
     } catch (error: any) {
       console.error('❌ Erro no login:', error);
+      
+      let errorMessage = "Erro interno do servidor";
+      if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message.includes('Network Error') || error.message.includes('Failed to fetch')) {
+        errorMessage = "Erro de conexão com o servidor";
+      }
+      
       toast({
         title: "Erro no login",
-        description: error.response?.data?.message || "Erro interno do servidor",
+        description: errorMessage,
         variant: "destructive",
       });
       return false;
@@ -121,7 +163,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       console.error('❌ Erro no logout:', error);
     } finally {
       localStorage.removeItem('authToken');
-      localStorage.removeItem('currentUser');
       setUser(null);
       console.log('✅ Logout realizado');
       toast({

@@ -9,13 +9,16 @@ const getApiUrl = () => {
   const protocol = window.location.protocol;
   const port = window.location.port;
   
+  console.log('🔍 Detectando URL da API:', { hostname, protocol, port });
+  
   // Se estiver acessando via localhost:8080 (desenvolvimento direto)
-  if (hostname === 'localhost' && port === '8080') {
+  if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '8080') {
+    console.log('📡 Usando URL direta do backend para desenvolvimento local');
     return 'http://localhost:3001';
   }
   
-  // Se estiver acessando via nginx (porta 80 ou hostname diferente)
-  // ou via IP externo
+  // Se estiver acessando via nginx (porta 80 ou qualquer outro IP/hostname)
+  console.log('📡 Usando URL via nginx proxy');
   return `${protocol}//${hostname}${port && port !== '80' && port !== '443' ? ':' + port : ''}`;
 };
 
@@ -29,6 +32,7 @@ export const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: false
 });
 
 // Interceptor para adicionar token de autenticação
@@ -39,10 +43,11 @@ api.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
     console.log('📡 Fazendo requisição para:', config.baseURL + config.url);
+    console.log('📡 Headers:', config.headers);
     return config;
   },
   (error) => {
-    console.error('❌ Erro na requisição:', error);
+    console.error('❌ Erro na configuração da requisição:', error);
     return Promise.reject(error);
   }
 );
@@ -51,13 +56,20 @@ api.interceptors.request.use(
 api.interceptors.response.use(
   (response) => {
     console.log('✅ Resposta recebida:', response.status, response.config.url);
+    console.log('✅ Dados da resposta:', response.data);
     return response;
   },
   (error) => {
-    console.error('❌ Erro na resposta:', error.response?.status, error.config?.url, error.response?.data);
+    console.error('❌ Erro na resposta:', {
+      status: error.response?.status,
+      url: error.config?.url,
+      data: error.response?.data,
+      message: error.message
+    });
     
     if (error.response?.status === 401) {
       // Token expirado ou inválido
+      console.log('🔒 Token inválido, redirecionando para login');
       localStorage.removeItem('authToken');
       localStorage.removeItem('currentUser');
       window.location.href = '/';
@@ -132,7 +144,6 @@ export const logApi = {
     api.get<ApiResponse<any>>('/logs/stats', { params }),
 };
 
-// Novos serviços para integração completa
 export const dateActionApi = {
   create: (data: { date: string; variables?: any }) =>
     api.post<ApiResponse<{ dateAction: any }>>('/date-actions', data),
@@ -161,4 +172,13 @@ export const customizationApi = {
   
   update: (data: any) =>
     api.put<ApiResponse<{ customization: any }>>('/customizations', data),
+};
+
+// Serviço para verificar conexão com o servidor
+export const serverApi = {
+  getServerTime: () =>
+    api.get<ApiResponse<{ serverTime: string; timezone: string }>>('/server-time'),
+  
+  healthCheck: () =>
+    api.get<ApiResponse>('/health'),
 };

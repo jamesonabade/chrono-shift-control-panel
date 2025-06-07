@@ -17,12 +17,15 @@ const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const configRoutes = require('./routes/config');
 const logRoutes = require('./routes/logs');
+const dateActionRoutes = require('./routes/dateActions');
+const databaseActionRoutes = require('./routes/databaseActions');
+const customizationRoutes = require('./routes/customizations');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Criar diretórios necessários
-const dirs = ['logs', 'uploads', 'temp'];
+const dirs = ['logs', 'uploads', 'temp', 'scripts'];
 dirs.forEach(dir => {
   const dirPath = path.join(__dirname, '..', dir);
   if (!fs.existsSync(dirPath)) {
@@ -33,7 +36,7 @@ dirs.forEach(dir => {
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
   message: {
     success: false,
@@ -57,8 +60,13 @@ app.use(helmet({
 }));
 
 app.use(cors({
-  origin: process.env.FRONTEND_URL || true,
-  credentials: true
+  origin: function (origin, callback) {
+    // Permitir qualquer origem para desenvolvimento e nginx
+    callback(null, true);
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
 }));
 
 app.use(compression());
@@ -77,7 +85,9 @@ app.use((req, res, next) => {
     method: req.method,
     url: req.url,
     ip: req.ip,
-    userAgent: req.get('User-Agent')
+    userAgent: req.get('User-Agent'),
+    origin: req.get('Origin'),
+    host: req.get('Host')
   });
   next();
 });
@@ -93,11 +103,23 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Server time endpoint
+app.get('/api/server-time', (req, res) => {
+  res.json({
+    success: true,
+    serverTime: new Date().toISOString(),
+    timezone: 'America/Bahia'
+  });
+});
+
 // Rotas da API
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/logs', logRoutes);
+app.use('/api/date-actions', dateActionRoutes);
+app.use('/api/database-actions', databaseActionRoutes);
+app.use('/api/customizations', customizationRoutes);
 
 // Middleware de tratamento de erros
 app.use((err, req, res, next) => {
@@ -119,6 +141,12 @@ app.use((err, req, res, next) => {
 
 // Middleware para rotas não encontradas
 app.use('*', (req, res) => {
+  logger.warn('Route not found', {
+    url: req.originalUrl,
+    method: req.method,
+    ip: req.ip
+  });
+  
   res.status(404).json({
     success: false,
     message: 'Rota não encontrada'
@@ -138,6 +166,7 @@ async function startServer() {
       logger.info(`🚀 Servidor rodando na porta ${PORT}`);
       logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
+      logger.info(`🔗 API Base: http://localhost:${PORT}/api`);
     });
   } catch (error) {
     logger.error('Falha ao iniciar servidor', error);
