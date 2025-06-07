@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Calendar, Database, FileCode, FileText, Upload, Users, User, Power, Terminal, Settings } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -10,6 +9,7 @@ import SystemLogs from '@/components/SystemLogs';
 import CommandManager from '@/components/CommandManager';
 import SystemConfiguration from '@/components/SystemConfiguration';
 import DateTime from '@/components/DateTime';
+import { api } from '@/lib/api';
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -19,48 +19,15 @@ const Dashboard = () => {
   const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
 
   useEffect(() => {
-    // Aplicar personalizações globais
-    applyGlobalCustomizations();
-
-    // Observar mudanças na transparência do localStorage
-    const handleStorageChange = () => {
-      const savedOpacity = localStorage.getItem('backgroundOpacity');
-      if (savedOpacity) {
-        const opacity = parseFloat(savedOpacity);
-        setBackgroundOpacity(opacity);
-        applyBackgroundOpacity(opacity);
-      }
-    };
-    window.addEventListener('storage', handleStorageChange);
-    return () => {
-      window.removeEventListener('storage', handleStorageChange);
-    };
+    // Carregar personalizações do servidor
+    loadCustomizations();
   }, []);
 
-  const applyBackgroundOpacity = (opacity: number) => {
-    const dashboardElement = document.getElementById('dashboard-main');
-    if (dashboardElement) {
-      dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
-      dashboardElement.style.backdropFilter = 'blur(2px)';
-    }
-  };
-
-  const applyGlobalCustomizations = async () => {
+  const loadCustomizations = async () => {
     try {
-      // Detectar URL do servidor baseado no ambiente
-      let serverUrl = 'http://localhost:3001';
-      if (typeof window !== 'undefined') {
-        const hostname = window.location.hostname;
-        const protocol = window.location.protocol;
-
-        // Se não estiver em localhost, usar o protocolo atual
-        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
-          serverUrl = `${protocol}//${hostname}`;
-        }
-      }
-      const response = await fetch(`${serverUrl}/api/customizations`);
-      if (response.ok) {
-        const customizations = await response.json();
+      const response = await api.get('/customizations');
+      if (response.data.success && response.data.data) {
+        const customizations = response.data.data;
 
         // Aplicar logo
         if (customizations.logo) {
@@ -91,6 +58,14 @@ const Dashboard = () => {
       }
     } catch (error) {
       console.error('Erro ao carregar personalizações:', error);
+    }
+  };
+
+  const applyBackgroundOpacity = (opacity: number) => {
+    const dashboardElement = document.getElementById('dashboard-main');
+    if (dashboardElement) {
+      dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+      dashboardElement.style.backdropFilter = 'blur(2px)';
     }
   };
 
@@ -154,12 +129,12 @@ const Dashboard = () => {
   }
 
   return (
-    <div id="dashboard-main" className="flex h-screen text-white relative" style={{
+    <div id="dashboard-main" className="flex min-h-screen w-full text-white relative" style={{
       backgroundColor: `rgba(15, 23, 42, ${1 - backgroundOpacity})`,
       backdropFilter: 'blur(2px)'
     }}>
       {/* Sidebar */}
-      <div className="w-64 bg-slate-800/70 backdrop-blur-sm border-r border-slate-700/50 flex flex-col relative z-10">
+      <div className="w-64 bg-slate-800/70 backdrop-blur-sm border-r border-slate-700/50 flex flex-col relative z-10 min-h-screen">
         <div className="p-4 border-b border-slate-700/50 flex flex-col space-y-2">
           {customLogo ? (
             <div className="flex items-center justify-center">
@@ -277,7 +252,7 @@ const Dashboard = () => {
       </div>
 
       {/* Content */}
-      <div className="flex-1 p-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
+      <div className="flex-1 p-6 bg-slate-900/60 backdrop-blur-sm relative z-10 min-h-screen overflow-auto">
         {renderContent()}
       </div>
     </div>

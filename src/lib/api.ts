@@ -7,14 +7,16 @@ const getApiUrl = () => {
   
   const hostname = window.location.hostname;
   const protocol = window.location.protocol;
+  const port = window.location.port;
   
   // Se estiver acessando via localhost:8080 (desenvolvimento direto)
-  if (hostname === 'localhost' && window.location.port === '8080') {
+  if (hostname === 'localhost' && port === '8080') {
     return 'http://localhost:3001';
   }
   
   // Se estiver acessando via nginx (porta 80 ou hostname diferente)
-  return `${protocol}//${hostname}`;
+  // ou via IP externo
+  return `${protocol}//${hostname}${port && port !== '80' && port !== '443' ? ':' + port : ''}`;
 };
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || getApiUrl();
@@ -128,4 +130,35 @@ export const logApi = {
   
   getLogStats: (params?: any) =>
     api.get<ApiResponse<any>>('/logs/stats', { params }),
+};
+
+// Novos serviços para integração completa
+export const dateActionApi = {
+  create: (data: { date: string; variables?: any }) =>
+    api.post<ApiResponse<{ dateAction: any }>>('/date-actions', data),
+  
+  getLast: () =>
+    api.get<ApiResponse<{ lastAction: any }>>('/date-actions/last'),
+  
+  getAll: (params?: any) =>
+    api.get<ApiResponse<{ actions: any[]; pagination: any }>>('/date-actions', { params }),
+};
+
+export const databaseActionApi = {
+  create: (data: { environment: string; variables?: any }) =>
+    api.post<ApiResponse<{ databaseAction: any }>>('/database-actions', data),
+  
+  getLast: () =>
+    api.get<ApiResponse<{ lastAction: any }>>('/database-actions/last'),
+  
+  getAll: (params?: any) =>
+    api.get<ApiResponse<{ actions: any[]; pagination: any }>>('/database-actions', { params }),
+};
+
+export const customizationApi = {
+  get: () =>
+    api.get<ApiResponse<any>>('/customizations'),
+  
+  update: (data: any) =>
+    api.put<ApiResponse<{ customization: any }>>('/customizations', data),
 };

@@ -23,8 +23,14 @@ model User {
   lastLoginAt DateTime?
   
   // Relacionamentos
-  sessions    Session[]
-  logs        SystemLog[]
+  sessions        Session[]
+  logs            SystemLog[]
+  dateActions     DateAction[]
+  databaseActions DatabaseAction[]
+  scriptActions   ScriptAction[]
+  commandActions  CommandAction[]
+  commands        Command[]
+  scripts         Script[]
   
   @@map("users")
 }
@@ -111,6 +117,133 @@ model FileUpload {
   @@map("file_uploads")
 }
 
+// Tabela para ações de alteração de data
+model DateAction {
+  id          String   @id @default(cuid())
+  date        String   // Data aplicada (DD/MM/YYYY)
+  userId      String
+  appliedAt   DateTime @default(now())
+  variables   Json?    // Variáveis de ambiente utilizadas
+  
+  // Relacionamentos
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("date_actions")
+}
+
+// Tabela para ações de restauração de banco
+model DatabaseAction {
+  id          String   @id @default(cuid())
+  environment String   // Ambiente restaurado (DEV, TESTES, etc.)
+  userId      String
+  restoredAt  DateTime @default(now())
+  variables   Json?    // Variáveis de ambiente utilizadas
+  
+  // Relacionamentos
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("database_actions")
+}
+
+// Tabela para scripts
+model Script {
+  id          String   @id @default(cuid())
+  name        String
+  filename    String
+  content     String?
+  description String?
+  uploadedBy  String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  // Relacionamentos
+  user        User          @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  actions     ScriptAction[]
+  
+  @@map("scripts")
+}
+
+// Tabela para ações de scripts
+model ScriptAction {
+  id         String      @id @default(cuid())
+  scriptId   String
+  action     ScriptActionType
+  userId     String
+  executedAt DateTime    @default(now())
+  details    Json?
+  
+  // Relacionamentos
+  script     Script      @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("script_actions")
+}
+
+// Tabela para comandos
+model Command {
+  id          String   @id @default(cuid())
+  name        String
+  command     String
+  description String?
+  type        String   // Tipo do comando
+  buttonType  String?  // Botão vinculado (date, database, scripts, etc.)
+  createdBy   String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastExecuted DateTime?
+  
+  // Relacionamentos
+  user        User           @relation(fields: [createdBy], references: [id], onDelete: Cascade)
+  executions  CommandAction[]
+  
+  @@map("commands")
+}
+
+// Tabela para execuções de comandos
+model CommandAction {
+  id         String   @id @default(cuid())
+  commandId  String
+  userId     String
+  executedAt DateTime @default(now())
+  result     Json?    // Resultado da execução
+  success    Boolean  @default(true)
+  
+  // Relacionamentos
+  command    Command  @relation(fields: [commandId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("command_actions")
+}
+
+// Tabela para configurações de personalização
+model SystemCustomization {
+  id          String   @id @default(cuid())
+  title       String?
+  logoHash    String?
+  logoSize    Int      @default(48)
+  backgroundHash String?
+  backgroundOpacity Float @default(0.5)
+  faviconHash String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("system_customizations")
+}
+
+// Tabela para variáveis de ambiente
+model EnvironmentVariable {
+  id          String   @id @default(cuid())
+  category    VariableCategory
+  key         String
+  value       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@unique([category, key])
+  @@map("environment_variables")
+}
+
 enum Role {
   ADMIN
   USER
@@ -121,4 +254,17 @@ enum LogLevel {
   WARN
   ERROR
   DEBUG
+}
+
+enum ScriptActionType {
+  UPLOAD
+  UPDATE
+  DELETE
+  EXECUTE
+}
+
+enum VariableCategory {
+  DATE
+  DATABASE
+  GENERAL
 }
