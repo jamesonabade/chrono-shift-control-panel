@@ -72,9 +72,7 @@ export const ServerStatus = ({ onStatusChange }: ServerStatusProps) => {
       <div className="text-xs text-slate-400 space-y-1">
         <div className="font-medium text-slate-300">Configuração da API:</div>
         <div>Ambiente: <span className={`font-medium ${
-          apiConfig.environment === 'development' ? 'text-blue-400' :
-          apiConfig.environment === 'docker' ? 'text-green-400' :
-          'text-purple-400'
+          apiConfig.environment === 'development' ? 'text-blue-400' : 'text-purple-400'
         }`}>{apiConfig.environment.toUpperCase()}</span></div>
         <div>Base URL: <span className="text-cyan-400">{apiConfig.baseUrl}</span></div>
         <div>Health Check: <span className="text-cyan-400">{apiConfig.healthUrl}</span></div>

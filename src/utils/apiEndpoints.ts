@@ -1,96 +1,70 @@
 
 /**
- * Utilitário para detecção automática de endpoints da API
- * Funciona em diferentes ambientes: desenvolvimento, Docker e produção
+ * Utilitário SIMPLIFICADO para endpoints da API
+ * Configuração automática e direta para produção
  */
 
 interface ApiConfig {
   baseUrl: string;
   healthUrl: string;
-  environment: 'development' | 'docker' | 'production';
+  environment: 'development' | 'production';
 }
 
 /**
- * Detecta automaticamente o ambiente e retorna a configuração apropriada da API
+ * Configuração SIMPLES e DIRETA da API
  */
 export const getApiConfig = (): ApiConfig => {
   const hostname = window.location.hostname;
   const protocol = window.location.protocol;
   const port = window.location.port;
-  const pathname = window.location.pathname;
   
-  console.log('🔍 Detectando ambiente da API:');
-  console.log(`  Hostname: ${hostname}`);
-  console.log(`  Protocol: ${protocol}`);
-  console.log(`  Port: ${port}`);
-  console.log(`  Pathname: ${pathname}`);
+  console.log('🔍 Detectando ambiente da API (SIMPLIFICADO):');
+  console.log(`  URL atual: ${window.location.href}`);
   
-  // 1. DESENVOLVIMENTO LOCAL (fora do Docker)
-  if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '8080') {
+  // 1. DESENVOLVIMENTO LOCAL (localhost:8080)
+  if (hostname === 'localhost' && port === '8080') {
     const config: ApiConfig = {
       baseUrl: 'http://localhost:3001',
       healthUrl: 'http://localhost:3001/api/health',
       environment: 'development'
     };
-    console.log('✅ Ambiente: DESENVOLVIMENTO LOCAL');
-    console.log(`  API Base URL: ${config.baseUrl}`);
+    console.log('✅ DESENVOLVIMENTO LOCAL detectado');
     return config;
   }
   
-  // 2. DOCKER COMPOSE (nginx + containers)
-  if ((hostname === 'localhost' || hostname === '127.0.0.1') && (port === '80' || port === '')) {
-    const config: ApiConfig = {
-      baseUrl: `${protocol}//${hostname}${port ? `:${port}` : ''}`,
-      healthUrl: `${protocol}//${hostname}${port ? `:${port}` : ''}/api/health`,
-      environment: 'docker'
-    };
-    console.log('✅ Ambiente: DOCKER COMPOSE');
-    console.log(`  API Base URL: ${config.baseUrl}`);
-    return config;
-  }
-  
-  // 3. PRODUÇÃO (domínio personalizado)
-  // Detectar se há um contexto/subpath (ex: /scripts)
-  let basePath = '';
-  const envBasePath = import.meta.env.VITE_BASE_PATH;
-  
-  if (envBasePath && envBasePath !== '/') {
-    basePath = envBasePath;
-  } else {
-    // Tentar detectar contexto pela URL atual
-    const pathSegments = pathname.split('/').filter(Boolean);
-    if (pathSegments.length > 0 && !pathSegments[0].includes('.')) {
-      basePath = `/${pathSegments[0]}`;
-    }
-  }
-  
+  // 2. PRODUÇÃO (qualquer domínio não-localhost)
+  const baseUrl = `${protocol}//${hostname}${port && port !== '80' && port !== '443' ? `:${port}` : ''}`;
   const config: ApiConfig = {
-    baseUrl: `${protocol}//${hostname}${basePath}`,
-    healthUrl: `${protocol}//${hostname}${basePath}/api/health`,
+    baseUrl,
+    healthUrl: `${baseUrl}/scripts/api/health`,
     environment: 'production'
   };
   
-  console.log('✅ Ambiente: PRODUÇÃO');
-  console.log(`  Base Path: ${basePath || '(raiz)'}`);
-  console.log(`  API Base URL: ${config.baseUrl}`);
+  console.log('✅ PRODUÇÃO detectado');
+  console.log(`  Base URL: ${config.baseUrl}`);
+  console.log(`  API Health: ${config.healthUrl}`);
   
   return config;
-};
-
-/**
- * Retorna a URL base da API para o ambiente atual
- */
-export const getApiBaseUrl = (): string => {
-  return getApiConfig().baseUrl;
 };
 
 /**
  * Retorna a URL completa para um endpoint específico
  */
 export const getApiEndpoint = (endpoint: string): string => {
-  const baseUrl = getApiBaseUrl();
-  const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-  return `${baseUrl}${cleanEndpoint}`;
+  const config = getApiConfig();
+  
+  // Para desenvolvimento local
+  if (config.environment === 'development') {
+    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+    return `${config.baseUrl}${cleanEndpoint}`;
+  }
+  
+  // Para produção - SEMPRE usar /scripts/api
+  const cleanEndpoint = endpoint.replace(/^\/?(api\/)?/, '');
+  const fullEndpoint = `/scripts/api/${cleanEndpoint}`;
+  
+  console.log(`🌐 Endpoint: ${endpoint} → ${fullEndpoint}`);
+  return fullEndpoint;
 };
 
 /**
@@ -101,7 +75,7 @@ export const getHealthCheckUrl = (): string => {
 };
 
 /**
- * Hook para obter informações da API de forma reativa
+ * Hook SIMPLES para configuração da API
  */
 export const useApiConfig = () => {
   const config = getApiConfig();
@@ -110,7 +84,6 @@ export const useApiConfig = () => {
     ...config,
     getEndpoint: (endpoint: string) => getApiEndpoint(endpoint),
     isLocal: config.environment === 'development',
-    isDocker: config.environment === 'docker',
     isProduction: config.environment === 'production'
   };
 };

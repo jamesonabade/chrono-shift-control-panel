@@ -1,5 +1,5 @@
 
-FROM docker:25 AS docker-cli
+FROM docker:25-cli AS docker-cli
 
 FROM node:20-bookworm
 
@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y \
     bash \
     curl \
     sudo \
+    postgresql-client \
+    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -44,20 +46,25 @@ WORKDIR /app
 # Criar diretórios necessários
 RUN mkdir -p /app/data /app/scripts /app/logs /app/uploads
 
-# Copiar arquivos do backend
-COPY package*.json ./
+# Copiar package.json do backend primeiro
+COPY backend/package*.json ./
 RUN npm install --omit=dev
 
-# Copiar código fonte e script de inicialização
-COPY . .
-COPY init.sh /app/init.sh
+# Copiar todo o código do backend
+COPY backend/ ./
 
-# Dar permissões
-RUN chmod +x /app/init.sh
-RUN chmod -R 755 /app/scripts 2>/dev/null || true
-RUN chmod -R 755 /app/logs 2>/dev/null || true
-RUN chmod -R 755 /app/data 2>/dev/null || true
-RUN chmod -R 755 /app/uploads 2>/dev/null || true
+# Copiar script de inicialização do backend
+COPY backend/init-prod.sh /app/init.sh
+
+# Converter quebras de linha e dar permissões
+RUN dos2unix /app/init.sh && \
+    chmod +x /app/init.sh
+
+# Dar permissões aos diretórios
+RUN chmod -R 755 /app/scripts 2>/dev/null || true && \
+    chmod -R 755 /app/logs 2>/dev/null || true && \
+    chmod -R 755 /app/data 2>/dev/null || true && \
+    chmod -R 755 /app/uploads 2>/dev/null || true
 
 # Expor porta
 EXPOSE 3001
@@ -66,5 +73,5 @@ EXPOSE 3001
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:3001/api/health || exit 1
 
-# Comando de entrada
-CMD ["/app/init.sh"]
+# Comando de entrada usando bash explicitamente
+CMD ["/bin/bash", "/app/init.sh"]
