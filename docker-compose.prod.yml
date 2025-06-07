@@ -2,35 +2,14 @@
 version: '3.8'
 
 services:
-  database:
-    image: postgres:15-alpine
-    environment:
-      - POSTGRES_DB=${POSTGRES_DB:-sistema_db}
-      - POSTGRES_USER=${POSTGRES_USER:-sistema_user}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-sistema_password_123}
-      - PGDATA=/var/lib/postgresql/data/pgdata
-    volumes:
-      - db_data:/var/lib/postgresql/data
-    restart: unless-stopped
-    networks:
-      - app-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sistema_user} -d ${POSTGRES_DB:-sistema_db}"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-
   nginx:
     image: nginx:alpine
     ports:
-      - "${HTTP_PORT:-80}:80"
-      - "${HTTPS_PORT:-443}:443"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx_config:/etc/nginx/conf.d
+      - ssl_certs:/etc/nginx/ssl:ro
     depends_on:
       - frontend
       - backend
@@ -60,33 +39,33 @@ services:
           listen 80;
           server_name _;
           
-          # API calls - DEVE VIR PRIMEIRO
-          location /scripts/api/ {
-              proxy_pass http://backend/api/;
-              proxy_set_header Host \$$host;
-              proxy_set_header X-Real-IP \$$remote_addr;
-              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
-              proxy_set_header X-Forwarded-Proto \$$scheme;
-              proxy_connect_timeout 30s;
-              proxy_send_timeout 60s;
-              proxy_read_timeout 60s;
-          }
+          # Configuração para subpath se BASE_PATH estiver definido
+          set \$$base_path '${BASE_PATH:-}';
           
-          # Frontend - DEVE VIR DEPOIS
-          location /scripts/ {
+          location \$$base_path/ {
               proxy_pass http://frontend/;
               proxy_set_header Host \$$host;
               proxy_set_header X-Real-IP \$$remote_addr;
               proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
               proxy_set_header X-Forwarded-Proto \$$scheme;
+              proxy_set_header X-Base-Path \$$base_path;
+              
+              # Remove o prefixo do path se necessário
+              if (\$$base_path != '') {
+                  rewrite ^\$$base_path(/.*)$$ \$$1 break;
+              }
           }
           
-          # Redirect root para /scripts
-          location = / {
-              return 301 /scripts/;
+          location \$$base_path/api/ {
+              proxy_pass http://backend/api/;
+              proxy_set_header Host \$$host;
+              proxy_set_header X-Real-IP \$$remote_addr;
+              proxy_set_header X-Forwarded-For \$$proxy_add_x_forwarded_for;
+              proxy_set_header X-Forwarded-Proto \$$scheme;
+              proxy_set_header X-Base-Path \$$base_path;
           }
           
-          # Health check
+          # Health check endpoint
           location /health {
               access_log off;
               return 200 'healthy';
@@ -99,15 +78,19 @@ services:
       "
 
   frontend:
-    image: ${FRONTEND_IMAGE:-registry.uesb.br/sig-testes/timeeventos-frontend:latest}
-    
+    # Use uma imagem pré-construída ou construa a partir do repositório
+    image: ${FRONTEND_IMAGE:-your-registry/sistema-frontend:latest}
+    # Se quiser construir a partir do repo, descomente as linhas abaixo:
+    # build:
+    #   context: https://github.com/seu-usuario/seu-repo.git
+    #   dockerfile: Dockerfile.frontend.prod
     expose:
       - "8080"
     environment:
       - NODE_ENV=production
       - VITE_APP_ENV=production
-      - VITE_API_URL=${VITE_API_URL:-/scripts/api}
-      - VITE_BASE_PATH=${BASE_PATH:-/scripts}
+      - VITE_API_URL=${VITE_API_URL:-/api}
+      - VITE_BASE_PATH=${BASE_PATH:-/}
       - VITE_PUBLIC_URL=${VITE_PUBLIC_URL:-}
     restart: unless-stopped
     networks:
@@ -118,25 +101,28 @@ services:
         max-size: "10m"
         max-file: "3"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health", "||", "exit", "1"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health", "||", "exit", "1"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
-    depends_on:
-      backend:
-        condition: service_healthy
 
   backend:
-    image: ${BACKEND_IMAGE:-registry.uesb.br/sig-testes/timeeventos-backend:latest}
-    
+    # Use uma imagem pré-construída ou construa a partir do repositório
+    image: ${BACKEND_IMAGE:-your-registry/sistema-backend:latest}
+    # Se quiser construir a partir do repo, descomente as linhas abaixo:
+    # build:
+    #   context: https://github.com/seu-usuario/seu-repo.git#main:backend
+    #   dockerfile: Dockerfile.prod
     expose:
       - "3001"
     volumes:
+      # Volumes nomeados para persistência (gerenciados pelo Docker)
       - app_data:/app/data
       - app_scripts:/app/scripts
       - app_logs:/app/logs
       - app_uploads:/app/uploads
+      # Socket do Docker para executar comandos
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - NODE_ENV=production
@@ -145,17 +131,15 @@ services:
       - SCRIPTS_DIR=/app/scripts
       - LOGS_DIR=/app/logs
       - UPLOADS_DIR=/app/uploads
+      # Configurações de contexto
       - BASE_PATH=${BASE_PATH:-}
       - DOMAIN=${DOMAIN:-localhost}
-      - DB_HOST=database
-      - DB_PORT=5432
-      - DB_NAME=${POSTGRES_DB:-sistema_db}
-      - DB_USER=${POSTGRES_USER:-sistema_user}
-      - DB_PASSWORD=${POSTGRES_PASSWORD:-sistema_password_123}
+      # Configurações de segurança
       - ADMIN_PASSWORD=${ADMIN_PASSWORD:-admin123}
       - USER_PASSWORD=${USER_PASSWORD:-user123}
       - JWT_SECRET=${JWT_SECRET:-your-secret-key}
       - CORS_ORIGIN=${CORS_ORIGIN:-*}
+      # Configurações de personalização
       - SYSTEM_TITLE=${SYSTEM_TITLE:-PAINEL DE CONTROLE}
       - SYSTEM_SUBTITLE=${SYSTEM_SUBTITLE:-Sistema de Gerenciamento Docker}
     restart: unless-stopped
@@ -168,9 +152,6 @@ services:
         max-file: "3"
     privileged: true
     user: root
-    depends_on:
-      database:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3001/api/health", "||", "exit", "1"]
       interval: 30s
@@ -179,6 +160,7 @@ services:
       start_period: 40s
 
 volumes:
+  # Volumes nomeados gerenciados pelo Docker (sem bind com host)
   app_data:
     driver: local
     name: sistema_data_${STACK_NAME:-default}
@@ -194,10 +176,6 @@ volumes:
   app_uploads:
     driver: local
     name: sistema_uploads_${STACK_NAME:-default}
-  
-  db_data:
-    driver: local
-    name: sistema_db_${STACK_NAME:-default}
   
   nginx_config:
     driver: local
@@ -216,11 +194,13 @@ networks:
       config:
         - subnet: 172.20.0.0/16
 
+# Configurações para uso com Docker Swarm (opcional)
 configs:
   system_config:
     external: true
     name: sistema_config_${STACK_NAME:-default}
 
+# Secrets para uso com Docker Swarm (opcional)
 secrets:
   admin_password:
     external: true
@@ -228,6 +208,3 @@ secrets:
   jwt_secret:
     external: true
     name: sistema_jwt_secret_${STACK_NAME:-default}
-  db_password:
-    external: true
-    name: sistema_db_password_${STACK_NAME:-default}
