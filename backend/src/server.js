@@ -34,40 +34,45 @@ dirs.forEach(dir => {
   }
 });
 
-// Rate limiting
+// Rate limiting mais permissivo
 const limiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100,
+  windowMs: 1 * 60 * 1000, // 1 minuto
+  max: 1000, // 1000 requisições por minuto
   message: {
     success: false,
     message: 'Muitas requisições, tente novamente mais tarde'
   },
   standardHeaders: true,
   legacyHeaders: false,
+  skip: (req) => {
+    // Não aplicar rate limiting para health checks e server-time
+    return req.path === '/health' || req.path === '/api/server-time';
+  }
 });
 
 // Middlewares de segurança
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
+  contentSecurityPolicy: false // Desabilitar CSP para evitar problemas
 }));
 
+// CORS mais permissivo
 app.use(cors({
-  origin: function (origin, callback) {
-    // Permitir qualquer origem para desenvolvimento e nginx
-    callback(null, true);
-  },
+  origin: true, // Permitir qualquer origem
   credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
+  optionsSuccessStatus: 200
 }));
+
+// Middleware para responder OPTIONS
+app.options('*', (req, res) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.sendStatus(200);
+});
 
 app.use(compression());
 app.use(limiter);
@@ -79,16 +84,16 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Servir arquivos estáticos
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
-// Middleware de logging de requisições
+// Middleware de logging de requisições (simplificado)
 app.use((req, res, next) => {
-  logger.info('Request received', {
-    method: req.method,
-    url: req.url,
-    ip: req.ip,
-    userAgent: req.get('User-Agent'),
-    origin: req.get('Origin'),
-    host: req.get('Host')
-  });
+  // Não fazer log do server-time para evitar spam
+  if (req.url !== '/api/server-time') {
+    logger.info('Request received', {
+      method: req.method,
+      url: req.url,
+      ip: req.ip
+    });
+  }
   next();
 });
 
@@ -103,7 +108,7 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Server time endpoint
+// Server time endpoint (otimizado)
 app.get('/api/server-time', (req, res) => {
   res.json({
     success: true,
