@@ -24,11 +24,17 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
     const hostname = window.location.hostname;
     const protocol = window.location.protocol;
     
+    console.log('CustomizationsPanel - Hostname:', hostname);
+    console.log('CustomizationsPanel - Porta:', window.location.port);
+    
     // Em desenvolvimento local
     if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      // Se estivermos na porta 8080, backend está em 3001
       if (window.location.port === '8080') {
         return 'http://localhost:3001';
       }
+      // Fallback para 3001
+      return 'http://localhost:3001';
     }
     
     // Em Docker ou produção
@@ -41,6 +47,10 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
   };
 
   const handleFileUpload = async (file: File, type: 'background' | 'logo' | 'favicon') => {
+    const serverUrl = getServerUrl();
+    console.log('Upload - URL do servidor:', serverUrl);
+    console.log('Upload - Servidor disponível:', isServerAvailable);
+    
     if (!isServerAvailable) {
       toast({
         title: "Servidor indisponível",
@@ -59,6 +69,11 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
           localStorage.setItem('favicon', result);
           updateFavicon(result);
         }
+        
+        toast({
+          title: "Salvo localmente",
+          description: `${type === 'background' ? 'Papel de parede' : type === 'logo' ? 'Logo' : 'Favicon'} salvo no navegador`,
+        });
       };
       reader.readAsDataURL(file);
       return;
@@ -69,16 +84,18 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
     formData.append('type', type);
 
     try {
-      const serverUrl = getServerUrl();
-      console.log('Upload para:', `${serverUrl}/api/upload`);
+      const uploadUrl = `${serverUrl}/api/upload`;
+      console.log('Upload para:', uploadUrl);
       
-      const response = await fetch(`${serverUrl}/api/upload`, {
+      const response = await fetch(uploadUrl, {
         method: 'POST',
         body: formData
       });
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Upload realizado com sucesso:', result);
+        
         toast({
           title: "Upload realizado!",
           description: `${type === 'background' ? 'Papel de parede' : type === 'logo' ? 'Logo' : 'Favicon'} enviado com sucesso`,
@@ -90,13 +107,31 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
         
         return result.url;
       } else {
-        throw new Error('Falha no upload');
+        const errorText = await response.text();
+        console.error('Erro no upload:', response.status, errorText);
+        throw new Error(`Falha no upload: ${response.status}`);
       }
     } catch (error) {
       console.error('Erro no upload:', error);
+      
+      // Fallback para localStorage
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (type === 'background') {
+          localStorage.setItem('loginBackground', result);
+        } else if (type === 'logo') {
+          localStorage.setItem('loginLogo', result);
+        } else if (type === 'favicon') {
+          localStorage.setItem('favicon', result);
+          updateFavicon(result);
+        }
+      };
+      reader.readAsDataURL(file);
+      
       toast({
         title: "Erro no upload",
-        description: "Falha ao enviar arquivo",
+        description: "Salvo localmente como alternativa",
         variant: "destructive"
       });
     }
@@ -120,12 +155,16 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
       backgroundOpacity
     };
 
+    const serverUrl = getServerUrl();
+    console.log('Salvando customizações - URL:', serverUrl);
+    console.log('Salvando customizações - Servidor disponível:', isServerAvailable);
+
     try {
       if (isServerAvailable) {
-        const serverUrl = getServerUrl();
-        console.log('Salvando customizações em:', `${serverUrl}/api/customizations`);
+        const saveUrl = `${serverUrl}/api/customizations`;
+        console.log('Salvando customizações em:', saveUrl);
         
-        const response = await fetch(`${serverUrl}/api/customizations`, {
+        const response = await fetch(saveUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -139,9 +178,12 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
             description: "Personalizações aplicadas com sucesso",
           });
         } else {
-          throw new Error('Falha ao salvar no servidor');
+          const errorText = await response.text();
+          console.error('Erro ao salvar:', response.status, errorText);
+          throw new Error(`Falha ao salvar no servidor: ${response.status}`);
         }
       } else {
+        // Salvar localmente
         localStorage.setItem('serverTitle', serverTitle);
         localStorage.setItem('logoSize', logoSize.toString());
         localStorage.setItem('backgroundOpacity', backgroundOpacity.toString());
@@ -157,9 +199,16 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
       
     } catch (error) {
       console.error('Erro ao salvar personalizações:', error);
+      
+      // Fallback para localStorage
+      localStorage.setItem('serverTitle', serverTitle);
+      localStorage.setItem('logoSize', logoSize.toString());
+      localStorage.setItem('backgroundOpacity', backgroundOpacity.toString());
+      updateTitle(serverTitle);
+      
       toast({
-        title: "Erro",
-        description: "Falha ao salvar configurações",
+        title: "Salvo localmente",
+        description: "Erro no servidor, configurações salvas no navegador",
         variant: "destructive"
       });
     }
@@ -167,7 +216,14 @@ export const CustomizationsPanel = ({ isServerAvailable }: CustomizationsPanelPr
 
   return (
     <div className="space-y-4 p-4 bg-slate-800/30 rounded-lg border border-slate-700/50">
-      <h4 className="text-md font-medium text-slate-300">Personalizações</h4>
+      <div className="flex justify-between items-center">
+        <h4 className="text-md font-medium text-slate-300">Personalizações</h4>
+        <div className="text-xs text-slate-400">
+          Status: <span className={isServerAvailable ? 'text-green-400' : 'text-red-400'}>
+            {isServerAvailable ? 'Conectado' : 'Offline'}
+          </span>
+        </div>
+      </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">

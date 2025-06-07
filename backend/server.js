@@ -14,6 +14,17 @@ let backendLogs = [];
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// Rota de health check
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Backend está funcionando',
+    timestamp: new Date().toISOString(),
+    version: '1.0.0'
+  });
+});
 
 // Configuração do multer para upload de scripts
 const storage = multer.diskStorage({
@@ -654,6 +665,7 @@ app.listen(PORT, '0.0.0.0', () => {
     port: PORT, 
     timestamp: new Date().toISOString(),
     endpoints: {
+      health: `http://localhost:${PORT}/api/health`,
       customizations: `http://localhost:${PORT}/api/customizations`,
       executeCommand: `http://localhost:${PORT}/api/execute-command`,
       scripts: `http://localhost:${PORT}/api/scripts`,
