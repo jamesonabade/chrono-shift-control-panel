@@ -1,10 +1,5 @@
 
-FROM docker:25 AS docker-cli
-
 FROM node:18-bookworm
-
-# Copiar Docker CLI do estágio anterior
-COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
 
 # Configurar locale e timezone
 RUN apt-get update && apt-get install -y \
@@ -12,8 +7,6 @@ RUN apt-get update && apt-get install -y \
     tzdata \
     bash \
     curl \
-    sudo \
-    tini \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -30,30 +23,35 @@ RUN ln -fs /usr/share/zoneinfo/America/Bahia /etc/localtime && \
 ENV LANG=pt_BR.UTF-8
 ENV LC_ALL=pt_BR.UTF-8
 ENV TZ=America/Bahia
-ENV NODE_ENV=development
-
-# Executar como root
-USER root
 
 WORKDIR /app
 
 # Criar diretórios necessários
 RUN mkdir -p /app/scripts /app/logs /app/data
 
-# Copiar arquivos do backend
+# Copiar package files primeiro
 COPY package*.json ./
+
+# Instalar dependências incluindo devDependencies para build
 RUN npm install
 
 # Copiar código fonte
 COPY . .
 
-# Dar permissões completas
+# Build da aplicação
+RUN npm run build
+
+# Instalar servidor estático global
+RUN npm install -g serve
+
+# Dar permissões aos scripts
+RUN chmod +x /app/scripts/*.sh 2>/dev/null || true
 RUN chmod -R 755 /app/scripts 2>/dev/null || true
 RUN chmod -R 755 /app/logs 2>/dev/null || true
 RUN chmod -R 755 /app/data 2>/dev/null || true
 
 # Expor porta
-EXPOSE 3001
+EXPOSE 8080
 
-# Comando de entrada
-CMD ["tini", "--", "npm", "start"]
+# Comando para produção
+CMD ["serve", "-s", "dist", "-l", "8080"]

@@ -1,193 +1,228 @@
-
-import { useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { LogOut, Calendar, Database, Upload, Users, FileText } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Database, FileCode, FileText, Upload, Users, User, Power, Terminal, Settings } from 'lucide-react';
 import DateSelector from '@/components/DateSelector';
 import DatabaseRestore from '@/components/DatabaseRestore';
 import ScriptUpload from '@/components/ScriptUpload';
 import UserManagement from '@/components/UserManagement';
 import SystemLogs from '@/components/SystemLogs';
-
-interface DashboardProps {
+import CommandManager from '@/components/CommandManager';
+import SystemConfiguration from '@/components/SystemConfiguration';
+import DateTime from '@/components/DateTime';
+const Dashboard = ({
+  onLogout
+}: {
   onLogout: () => void;
-}
+}) => {
+  const [activeTab, setActiveTab] = useState('date');
+  const [customLogo, setCustomLogo] = useState('');
+  const [logoSize, setLogoSize] = useState(48);
+  const [backgroundOpacity, setBackgroundOpacity] = useState(0.5);
+  useEffect(() => {
+    const authStatus = localStorage.getItem('isAuthenticated');
+    if (authStatus !== 'true') {
+      onLogout();
+    }
 
-const Dashboard = ({ onLogout }: DashboardProps) => {
-  const currentUser = localStorage.getItem('currentUser') || 'administrador';
+    // Aplicar personalizações globais
+    applyGlobalCustomizations();
+
+    // Observar mudanças na transparência do localStorage
+    const handleStorageChange = () => {
+      const savedOpacity = localStorage.getItem('backgroundOpacity');
+      if (savedOpacity) {
+        const opacity = parseFloat(savedOpacity);
+        setBackgroundOpacity(opacity);
+        applyBackgroundOpacity(opacity);
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, [onLogout]);
+  const applyBackgroundOpacity = (opacity: number) => {
+    const dashboardElement = document.getElementById('dashboard-main');
+    if (dashboardElement) {
+      dashboardElement.style.backgroundColor = `rgba(15, 23, 42, ${1 - opacity})`;
+      dashboardElement.style.backdropFilter = 'blur(2px)';
+    }
+  };
+  const applyGlobalCustomizations = async () => {
+    try {
+      // Detectar URL do servidor baseado no ambiente
+      let serverUrl = 'http://localhost:3001';
+      if (typeof window !== 'undefined') {
+        const hostname = window.location.hostname;
+        const protocol = window.location.protocol;
+
+        // Se não estiver em localhost, usar o protocolo atual
+        if (hostname !== 'localhost' && hostname !== '127.0.0.1') {
+          serverUrl = `${protocol}//${hostname}`;
+        }
+      }
+      const response = await fetch(`${serverUrl}/api/customizations`);
+      if (response.ok) {
+        const customizations = await response.json();
+
+        // Aplicar logo
+        if (customizations.logo) {
+          setCustomLogo(customizations.logo);
+          setLogoSize(customizations.logoSize || 48);
+        }
+
+        // Aplicar background com transparência configurável
+        if (customizations.background) {
+          const opacity = customizations.backgroundOpacity !== undefined ? customizations.backgroundOpacity : 0.5;
+          setBackgroundOpacity(opacity);
+
+          // Aplicar fundo na body
+          document.body.style.backgroundImage = `url(${customizations.background})`;
+          document.body.style.backgroundSize = 'cover';
+          document.body.style.backgroundPosition = 'center';
+          document.body.style.backgroundAttachment = 'fixed';
+          document.body.style.backgroundRepeat = 'no-repeat';
+
+          // Aplicar transparência no dashboard
+          applyBackgroundOpacity(opacity);
+        }
+
+        // Aplicar título
+        if (customizations.title) {
+          document.title = customizations.title;
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao carregar personalizações:', error);
+      // Fallback para localStorage
+      const bgImage = localStorage.getItem('loginBackground');
+      const logo = localStorage.getItem('loginLogo');
+      const size = parseInt(localStorage.getItem('logoSize') || '48');
+      const opacity = parseFloat(localStorage.getItem('backgroundOpacity') || '0.5');
+      if (bgImage) {
+        setBackgroundOpacity(opacity);
+        document.body.style.backgroundImage = `url(${bgImage})`;
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundRepeat = 'no-repeat';
+
+        // Aplicar transparência
+        applyBackgroundOpacity(opacity);
+      }
+      if (logo) {
+        setCustomLogo(logo);
+        setLogoSize(size);
+      }
+    }
+  };
+  const currentUser = localStorage.getItem('currentUser');
   const isAdmin = currentUser === 'administrador';
-
-  // Definir permissões por usuário
   const getUserPermissions = () => {
-    const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
-    
-    // Permissões padrão para administrador
-    if (currentUser === 'administrador') {
+    if (isAdmin) {
       return {
         date: true,
         database: true,
         scripts: true,
+        commands: true,
         users: true,
-        logs: true
+        logs: true,
+        config: true
       };
     }
-
-    // Permissões para usuário comum (padrão)
-    if (currentUser === 'usuario') {
-      return userPermissions[currentUser] || {
-        date: true,
-        database: false,
-        scripts: true,
-        users: false,
-        logs: true
-      };
-    }
-
-    // Permissões para outros usuários criados
-    return userPermissions[currentUser] || {
-      date: true,
-      database: false,
-      scripts: true,
-      users: false,
-      logs: false
-    };
+    const userPermissions = JSON.parse(localStorage.getItem('userPermissions') || '{}');
+    return userPermissions[currentUser || ''] || {};
   };
-
   const permissions = getUserPermissions();
-
-  // Definir abas baseadas nas permissões
-  const getAllTabs = () => [
-    { value: 'date', label: 'Data', icon: Calendar, permission: 'date' },
-    { value: 'database', label: 'Banco', icon: Database, permission: 'database' },
-    { value: 'scripts', label: 'Scripts', icon: Upload, permission: 'scripts' },
-    { value: 'users', label: 'Usuários', icon: Users, permission: 'users' },
-    { value: 'logs', label: 'Logs', icon: FileText, permission: 'logs' }
-  ];
-
-  const userTabs = getAllTabs().filter(tab => permissions[tab.permission]);
-
-  const handleLogout = () => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      action: 'LOGOUT',
-      details: { username: currentUser },
-      user: currentUser
-    };
-    
-    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-    logs.push(logEntry);
-    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
-
-    localStorage.removeItem('currentUser');
-    onLogout();
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'date':
+        return permissions.date ? <DateSelector /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      case 'database':
+        return permissions.database ? <DatabaseRestore /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      case 'scripts':
+        return permissions.scripts ? <ScriptUpload /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      case 'commands':
+        return permissions.commands ? <CommandManager /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      case 'users':
+        return permissions.users ? <UserManagement /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      case 'logs':
+        return permissions.logs ? <SystemLogs /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      case 'config':
+        return permissions.config ? <SystemConfiguration /> : <div className="p-6 text-center text-slate-400">Sem permissão para acessar esta seção</div>;
+      default:
+        return <DateSelector />;
+    }
   };
+  return <div id="dashboard-main" className="flex h-screen text-white relative" style={{
+    backgroundColor: `rgba(15, 23, 42, ${1 - backgroundOpacity})`,
+    backdropFilter: 'blur(2px)'
+  }}>
+      {/* Sidebar */}
+      <div className="w-64 bg-slate-800/70 backdrop-blur-sm border-r border-slate-700/50 flex flex-col relative z-10">
+        <div className="p-4 border-b border-slate-700/50 flex flex-col space-y-2">
+          {customLogo ? <div className="flex items-center justify-center">
+              <img src={customLogo} alt="Logo" className="object-contain" style={{
+            height: `${logoSize}px`
+          }} />
+            </div> : <div className="text-xl font-semibold text-white text-center">
+              Painel de Controle
+            </div>}
+          <DateTime className="text-xs text-center" />
+        </div>
+        
+        <div className="p-4 space-y-2 flex-1">
+          {permissions.date && <button onClick={() => setActiveTab('date')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'date' ? 'bg-blue-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <Calendar className="w-4 h-4 mr-2 inline" />
+              Data
+            </button>}
+          
+          {permissions.database && <button onClick={() => setActiveTab('database')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'database' ? 'bg-green-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <Database className="w-4 h-4 mr-2 inline" />
+              Banco
+            </button>}
+          
+          {permissions.scripts && <button onClick={() => setActiveTab('scripts')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'scripts' ? 'bg-purple-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <Upload className="w-4 h-4 mr-2 inline" />
+              Scripts
+            </button>}
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZGVmcz48cGF0dGVybiBpZD0iZ3JpZCIgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBwYXR0ZXJuVW5pdHM9InVzZXJTcGFjZU9uVXNlIj48cGF0aCBkPSJNIDQwIDAgTCAwIDAgMCA0MCIgZmlsbD0ibm9uZSIgc3Ryb2tlPSJyZ2JhKDU5LCAxMzAsIDI0NiwgMC4xKSIgc3Ryb2tlLXdpZHRoPSIxIi8+PC9wYXR0ZXJuPjwvZGVmcz48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJ1cmwoI2dyaWQpIi8+PC9zdmc+')] opacity-20"></div>
-      
-      {/* Header */}
-      <div className="relative z-10 border-b border-cyan-500/30 bg-slate-800/50 backdrop-blur-lg">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold bg-gradient-to-r from-cyan-400 to-blue-400 bg-clip-text text-transparent">
-              PAINEL DE CONTROLE
-            </h1>
-            <p className="text-sm text-slate-400">
-              🐳 Docker | Usuário: {currentUser} {isAdmin && '(Admin)'}
-            </p>
+          {permissions.commands && <button onClick={() => setActiveTab('commands')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'commands' ? 'bg-yellow-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <Terminal className="w-4 h-4 mr-2 inline" />
+              Comandos
+            </button>}
+          
+          {permissions.users && <button onClick={() => setActiveTab('users')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'users' ? 'bg-emerald-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <Users className="w-4 h-4 mr-2 inline" />
+              Usuários
+            </button>}
+          
+          {permissions.logs && <button onClick={() => setActiveTab('logs')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'logs' ? 'bg-cyan-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <FileText className="w-4 h-4 mr-2 inline" />
+              Logs
+            </button>}
+
+          {permissions.config && <button onClick={() => setActiveTab('config')} className={`w-full px-4 py-2 rounded-lg font-medium transition-colors text-left ${activeTab === 'config' ? 'bg-orange-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'}`}>
+              <Settings className="w-4 h-4 mr-2 inline" />
+              Configurações
+            </button>}
+        </div>
+        
+        <div className="p-4 border-t border-slate-700/50">
+          <div className="flex items-center space-x-2 mb-2 text-sm text-slate-400">
+            <User className="w-4 h-4" />
+            <span>{currentUser}</span>
           </div>
-          <Button 
-            onClick={handleLogout}
-            variant="outline"
-            className="border-red-500/50 text-red-400 hover:bg-red-500/20 hover:border-red-400"
-          >
-            <LogOut className="w-4 h-4 mr-2" />
+          <button onClick={onLogout} className="w-full px-4 py-2 rounded-lg font-medium bg-red-600/80 hover:bg-red-700/80 text-white transition-colors backdrop-blur-sm">
+            <Power className="w-4 h-4 mr-2 inline" />
             Sair
-          </Button>
+          </button>
         </div>
       </div>
 
-      {/* Main Content */}
-      <div className="relative z-10 container mx-auto px-4 py-8">
-        <Tabs defaultValue={userTabs[0]?.value || 'date'} className="w-full">
-          <TabsList className={`grid w-full grid-cols-${userTabs.length} bg-slate-800/50 backdrop-blur-lg border border-cyan-500/30`}>
-            {userTabs.map((tab) => (
-              <TabsTrigger 
-                key={tab.value} 
-                value={tab.value} 
-                className="data-[state=active]:bg-cyan-500/20"
-              >
-                <tab.icon className="w-4 h-4 mr-2" />
-                {tab.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-
-          {permissions.date && (
-            <TabsContent value="date" className="mt-6">
-              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-xl text-cyan-400 flex items-center">
-                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                    Configuração de Data
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DateSelector />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {permissions.database && (
-            <TabsContent value="database" className="mt-6">
-              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-xl text-cyan-400 flex items-center">
-                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                    Restauração de Banco (Admin)
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <DatabaseRestore />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {permissions.scripts && (
-            <TabsContent value="scripts" className="mt-6">
-              <Card className="bg-slate-800/80 backdrop-blur-lg border-cyan-500/30 shadow-xl shadow-cyan-500/10">
-                <CardHeader>
-                  <CardTitle className="text-xl text-cyan-400 flex items-center">
-                    <div className="w-3 h-3 bg-cyan-400 rounded-full mr-3 animate-pulse"></div>
-                    Scripts de Administração
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <ScriptUpload />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          )}
-
-          {permissions.users && (
-            <TabsContent value="users" className="mt-6">
-              <UserManagement />
-            </TabsContent>
-          )}
-
-          {permissions.logs && (
-            <TabsContent value="logs" className="mt-6">
-              <SystemLogs />
-            </TabsContent>
-          )}
-        </Tabs>
+      {/* Content */}
+      <div className="flex-1 p-6 bg-slate-900/60 backdrop-blur-sm relative z-10">
+        {renderContent()}
       </div>
-    </div>
-  );
+    </div>;
 };
-
 export default Dashboard;

@@ -1,211 +1,277 @@
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { Calendar, Play } from 'lucide-react';
 
 const DateSelector = () => {
-  const [selectedDay, setSelectedDay] = useState<string>('');
-  const [selectedMonth, setSelectedMonth] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState('');
+  const [selectedYear, setSelectedYear] = useState('');
+  const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
 
-  const days = Array.from({ length: 31 }, (_, i) => i + 1);
-  const months = [
-    { value: '1', label: 'Janeiro' },
-    { value: '2', label: 'Fevereiro' },
-    { value: '3', label: 'Março' },
-    { value: '4', label: 'Abril' },
-    { value: '5', label: 'Maio' },
-    { value: '6', label: 'Junho' },
-    { value: '7', label: 'Julho' },
-    { value: '8', label: 'Agosto' },
-    { value: '9', label: 'Setembro' },
-    { value: '10', label: 'Outubro' },
-    { value: '11', label: 'Novembro' },
-    { value: '12', label: 'Dezembro' }
-  ];
-
-  const logAction = (action: string, details: any) => {
-    const logEntry = {
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      user: localStorage.getItem('currentUser') || 'admin'
-    };
+  const getServerUrl = () => {
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
     
-    console.log('DATE_SELECTOR_LOG:', JSON.stringify(logEntry));
+    // Em desenvolvimento local
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      if (window.location.port === '8080') {
+        return 'http://localhost:3001';
+      }
+    }
     
-    const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
-    logs.push(logEntry);
-    localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+    // Em Docker ou produção
+    const basePath = import.meta.env.VITE_BASE_PATH || '';
+    if (basePath && basePath !== '/') {
+      return `${protocol}//${hostname}${basePath}`;
+    }
+    
+    return `${protocol}//${hostname}`;
   };
 
-  const handleApply = async () => {
-    if (!selectedDay || !selectedMonth) {
+  // Carregar último estado salvo
+  useEffect(() => {
+    const savedDay = localStorage.getItem('lastSelectedDay');
+    const savedMonth = localStorage.getItem('lastSelectedMonth');
+    const savedYear = localStorage.getItem('lastSelectedYear');
+    if (savedDay) setSelectedDay(savedDay);
+    if (savedMonth) setSelectedMonth(savedMonth);
+    if (savedYear) setSelectedYear(savedYear);
+  }, []);
+
+  const executeCommand = async () => {
+    if (!selectedDay || !selectedMonth || !selectedYear) {
       toast({
-        title: "Erro",
-        description: "Por favor, selecione dia e mês",
+        title: "Dados incompletos",
+        description: "Por favor, selecione o dia, mês e ano",
         variant: "destructive"
       });
       return;
     }
 
-    setIsLoading(true);
+    const formattedDate = `${selectedDay.padStart(2, '0')}/${selectedMonth.padStart(2, '0')}/${selectedYear}`;
+
+    setIsExecuting(true);
 
     try {
-      // Verificar se existe script de data
-      const checkResponse = await fetch('http://localhost:3001/api/check-script/date');
-      const checkResult = await checkResponse.json();
-      
-      if (!checkResult.exists) {
+      // Carregar comandos vinculados ao botão data
+      const buttonCommands = JSON.parse(localStorage.getItem('buttonCommands') || '{}');
+      const dateCommands = buttonCommands.date || [];
+
+      console.log('Comandos vinculados ao botão data:', dateCommands);
+
+      if (dateCommands.length === 0) {
         toast({
-          title: "Script não encontrado",
-          description: "O script de alteração de data não foi carregado. Por favor, faça o upload do script na aba Scripts.",
+          title: "Nenhum comando configurado",
+          description: "Configure comandos para o botão Data na seção Comandos",
           variant: "destructive"
         });
-        setIsLoading(false);
+        setIsExecuting(false);
         return;
       }
 
-      // Definir variáveis de ambiente
-      const envVars = {
-        VARIAVEL_DIA: selectedDay,
-        VARIAVEL_MES: selectedMonth,
-        DIA_SELECIONADO: selectedDay,
-        MES_SELECIONADO: selectedMonth
+      // Carregar variáveis fixas do sistema (incluindo variáveis gerais)
+      const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
+      console.log('Variáveis do sistema:', systemVars);
+      
+      const envVariables = {
+        NEW_DATE: formattedDate,
+        DATE: formattedDate,
+        DAY: selectedDay.padStart(2, '0'),
+        MONTH: selectedMonth.padStart(2, '0'),
+        YEAR: selectedYear,
+        ...(systemVars.date || {}),
+        ...(systemVars.general || {}) // Incluir variáveis gerais
       };
 
-      const setEnvResponse = await fetch('http://localhost:3001/api/set-env', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(envVars)
-      });
+      console.log('Variáveis de ambiente para execução:', envVariables);
 
-      if (!setEnvResponse.ok) {
-        throw new Error('Falha ao definir variáveis de ambiente');
-      }
-
-      // Executar script de data
-      const executeResponse = await fetch('http://localhost:3001/api/execute-script', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          scriptName: checkResult.script,
-          environment: envVars,
-          action: 'APLICAR_DATA'
-        })
-      });
-
-      const executeResult = await executeResponse.json();
+      // Executar todos os comandos vinculados
+      let allSuccess = true;
+      const serverUrl = getServerUrl();
+      console.log('URL do servidor para execução:', `${serverUrl}/api/execute-command`);
       
-      if (executeResult.success) {
-        logAction('APPLY_DATE_SUCCESS', {
-          day: selectedDay,
-          month: selectedMonth,
-          monthName: months.find(m => m.value === selectedMonth)?.label,
-          script: checkResult.script,
-          variables: envVars
-        });
+      for (const commandId of dateCommands) {
+        const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');
+        const command = allCommands.find((cmd: any) => cmd.id === commandId);
+        
+        if (command) {
+          console.log('Executando comando:', command);
+          
+          const response = await fetch(`${serverUrl}/api/execute-command`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              command: command.command,
+              name: `Data: ${command.name}`,
+              description: `Alterar data para ${formattedDate} - ${command.description}`,
+              environment: envVariables
+            })
+          });
 
-        toast({
-          title: "Data aplicada com sucesso!",
-          description: `Data configurada: ${selectedDay}/${months.find(m => m.value === selectedMonth)?.label}`,
-        });
-      } else {
-        logAction('APPLY_DATE_ERROR', {
-          day: selectedDay,
-          month: selectedMonth,
-          script: checkResult.script,
-          error: executeResult.error
-        });
-
-        toast({
-          title: "Erro na execução",
-          description: executeResult.message || "Erro ao executar script de data",
-          variant: "destructive"
-        });
+          const result = await response.json();
+          console.log('Resultado da execução:', result);
+          
+          if (!result.success) {
+            allSuccess = false;
+            toast({
+              title: `Erro no comando: ${command.name}`,
+              description: result.error || "Falha na execução",
+              variant: "destructive"
+            });
+          }
+        } else {
+          console.warn('Comando não encontrado:', commandId);
+        }
       }
 
-    } catch (error) {
-      console.error('Erro ao aplicar data:', error);
-      logAction('APPLY_DATE_FATAL_ERROR', {
-        day: selectedDay,
-        month: selectedMonth,
-        error: error instanceof Error ? error.message : 'Erro desconhecido'
-      });
+      if (allSuccess) {
+        // Salvar último estado aplicado
+        localStorage.setItem('lastSelectedDay', selectedDay);
+        localStorage.setItem('lastSelectedMonth', selectedMonth);
+        localStorage.setItem('lastSelectedYear', selectedYear);
+        
+        toast({
+          title: "Data aplicada!",
+          description: `Sistema configurado para ${formattedDate}`,
+        });
 
+        // Sincronizar horário com servidor
+        try {
+          const response = await fetch(`${serverUrl}/api/server-time`);
+          if (response.ok) {
+            const { serverTime } = await response.json();
+            console.log('Horário do servidor após alteração:', serverTime);
+            
+            // Disparar evento para atualizar DateTime
+            window.dispatchEvent(new CustomEvent('dateChanged', { 
+              detail: { newDate: formattedDate, serverTime } 
+            }));
+          }
+        } catch (error) {
+          console.warn('Não foi possível sincronizar com o servidor:', error);
+        }
+
+        // Log da ação
+        const logEntry = {
+          timestamp: new Date().toISOString(),
+          level: 'info',
+          action: 'DATE_APPLIED',
+          details: {
+            date: formattedDate,
+            commandsExecuted: dateCommands.length,
+            variables: envVariables
+          },
+          message: `Data aplicada: ${formattedDate}`
+        };
+        
+        const logs = JSON.parse(localStorage.getItem('systemLogs') || '[]');
+        logs.push(logEntry);
+        localStorage.setItem('systemLogs', JSON.stringify(logs.slice(-100)));
+      }
+    } catch (error) {
+      console.error('Erro na execução:', error);
       toast({
         title: "Erro",
-        description: "Erro ao aplicar configurações de data",
+        description: `Erro ao executar comandos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`,
         variant: "destructive"
       });
     } finally {
-      setIsLoading(false);
+      setIsExecuting(false);
     }
   };
 
+  // Gerar arrays para dias, meses e anos
+  const days = Array.from({ length: 31 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const months = Array.from({ length: 12 }, (_, i) => (i + 1).toString().padStart(2, '0'));
+  const years = Array.from({ length: 50 }, (_, i) => (new Date().getFullYear() - 25 + i).toString());
+
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-300">Dia</label>
-          <Select value={selectedDay} onValueChange={setSelectedDay}>
-            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
-              <SelectValue placeholder="Selecione o dia" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600 z-[100] backdrop-blur-xl shadow-2xl">
-              {days.map((day) => (
-                <SelectItem key={day} value={day.toString()} className="text-white hover:bg-slate-700 focus:bg-slate-700">
-                  {day}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <label className="text-sm font-medium text-slate-300">Mês</label>
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white focus:border-cyan-400">
-              <SelectValue placeholder="Selecione o mês" />
-            </SelectTrigger>
-            <SelectContent className="bg-slate-800 border-slate-600 z-[100] backdrop-blur-xl shadow-2xl">
-              {months.map((month) => (
-                <SelectItem key={month.value} value={month.value} className="text-white hover:bg-slate-700 focus:bg-slate-700">
-                  {month.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      <div className="flex items-center space-x-2">
+        <Calendar className="w-5 h-5 text-blue-400" />
+        <h3 className="text-lg font-semibold text-blue-400">Alteração de Data do Sistema</h3>
+      </div>
+      
+      <div className="space-y-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="day" className="text-slate-300">Dia</Label>
+            <Select value={selectedDay} onValueChange={setSelectedDay}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
+                <SelectValue placeholder="Dia" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 text-white max-h-60">
+                {days.map(day => (
+                  <SelectItem key={day} value={day} className="hover:bg-slate-700">
+                    {day}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="month" className="text-slate-300">Mês</Label>
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
+                <SelectValue placeholder="Mês" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 text-white">
+                {months.map(month => (
+                  <SelectItem key={month} value={month} className="hover:bg-slate-700">
+                    {month}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="year" className="text-slate-300">Ano</Label>
+            <Select value={selectedYear} onValueChange={setSelectedYear}>
+              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white hover:bg-slate-600/50">
+                <SelectValue placeholder="Ano" />
+              </SelectTrigger>
+              <SelectContent className="bg-slate-800 border-slate-600 text-white max-h-60">
+                {years.map(year => (
+                  <SelectItem key={year} value={year} className="hover:bg-slate-700">
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
       <Button 
-        onClick={handleApply}
-        className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 transition-all duration-300 transform hover:scale-105 shadow-lg shadow-cyan-500/30"
-        disabled={!selectedDay || !selectedMonth || isLoading}
+        onClick={executeCommand}
+        disabled={!selectedDay || !selectedMonth || !selectedYear || isExecuting}
+        className="w-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white font-semibold py-3"
       >
-        {isLoading ? 'APLICANDO...' : 'APLICAR DATA'}
+        {isExecuting ? (
+          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+        ) : (
+          <Play className="w-5 h-5 mr-2" />
+        )}
+        {isExecuting ? 'Aplicando...' : 'Aplicar Data'}
       </Button>
 
-      {selectedDay && selectedMonth && (
-        <div className="p-4 bg-slate-700/30 rounded-lg border border-cyan-500/30">
-          <p className="text-sm text-slate-300">
-            Variáveis que serão definidas:
+      {selectedDay && selectedMonth && selectedYear && (
+        <div className="p-4 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+          <p className="text-blue-300 text-sm">
+            <strong>Nova data:</strong> {selectedDay}/{selectedMonth}/{selectedYear}
           </p>
-          <ul className="mt-2 text-xs text-cyan-400">
-            <li>VARIAVEL_DIA = {selectedDay}</li>
-            <li>VARIAVEL_MES = {selectedMonth}</li>
-            <li>DIA_SELECIONADO = {selectedDay}</li>
-            <li>MES_SELECIONADO = {selectedMonth}</li>
-          </ul>
         </div>
       )}
+
+      <div className="p-3 bg-slate-700/20 rounded text-xs text-slate-400">
+        <p><strong>Variáveis disponíveis:</strong> $NEW_DATE, $DATE, $DAY, $MONTH, $YEAR + variáveis personalizadas</p>
+      </div>
     </div>
   );
 };

@@ -1,7 +1,7 @@
 
 FROM docker:25 AS docker-cli
 
-FROM node:18-bookworm
+FROM node:20-bookworm
 
 # Copiar Docker CLI do estágio anterior
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
@@ -13,7 +13,6 @@ RUN apt-get update && apt-get install -y \
     bash \
     curl \
     sudo \
-    tini \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -30,7 +29,12 @@ RUN ln -fs /usr/share/zoneinfo/America/Bahia /etc/localtime && \
 ENV LANG=pt_BR.UTF-8
 ENV LC_ALL=pt_BR.UTF-8
 ENV TZ=America/Bahia
-ENV NODE_ENV=development
+ENV NODE_ENV=production
+ENV PORT=3001
+ENV DATA_DIR=/app/data
+ENV SCRIPTS_DIR=/app/scripts
+ENV LOGS_DIR=/app/logs
+ENV UPLOADS_DIR=/app/uploads
 
 # Executar como root
 USER root
@@ -38,22 +42,29 @@ USER root
 WORKDIR /app
 
 # Criar diretórios necessários
-RUN mkdir -p /app/scripts /app/logs /app/data
+RUN mkdir -p /app/data /app/scripts /app/logs /app/uploads
 
 # Copiar arquivos do backend
 COPY package*.json ./
-RUN npm install
+RUN npm install --omit=dev
 
-# Copiar código fonte
+# Copiar código fonte e script de inicialização
 COPY . .
+COPY init.sh /app/init.sh
 
-# Dar permissões completas
+# Dar permissões
+RUN chmod +x /app/init.sh
 RUN chmod -R 755 /app/scripts 2>/dev/null || true
 RUN chmod -R 755 /app/logs 2>/dev/null || true
 RUN chmod -R 755 /app/data 2>/dev/null || true
+RUN chmod -R 755 /app/uploads 2>/dev/null || true
 
 # Expor porta
 EXPOSE 3001
 
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:3001/api/health || exit 1
+
 # Comando de entrada
-CMD ["tini", "--", "npm", "start"]
+CMD ["/app/init.sh"]
