@@ -174,6 +174,48 @@ export const customizationApi = {
     api.put<ApiResponse<{ customization: any }>>('/customizations', data),
 };
 
+// Novos serviços para scripts, comandos e configurações
+export const scriptApi = {
+  getScripts: () =>
+    api.get<ApiResponse<{ scripts: any[] }>>('/scripts'),
+  
+  uploadScript: (formData: FormData) =>
+    api.post<ApiResponse<{ script: any }>>('/scripts/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }),
+  
+  executeScript: (data: { scriptId: string; environment?: any; action?: string }) =>
+    api.post<ApiResponse<any>>('/scripts/execute', data),
+  
+  deleteScript: (id: string) =>
+    api.delete<ApiResponse>(`/scripts/${id}`),
+};
+
+export const commandApi = {
+  getCommands: () =>
+    api.get<ApiResponse<{ commands: any[] }>>('/commands'),
+  
+  createCommand: (data: { name: string; command: string; description?: string; type?: string }) =>
+    api.post<ApiResponse<{ command: any }>>('/commands', data),
+  
+  executeCommand: (data: { command: string; name?: string; description?: string; environment?: any }) =>
+    api.post<ApiResponse<any>>('/commands/execute', data),
+  
+  deleteCommand: (id: string) =>
+    api.delete<ApiResponse>(`/commands/${id}`),
+};
+
+export const settingApi = {
+  getSettings: (group?: string) =>
+    api.get<ApiResponse<{ settings: any }>>('/settings', { params: { group } }),
+  
+  saveSettings: (data: { settings: any; group?: string }) =>
+    api.post<ApiResponse<{ settings: any[] }>>('/settings', data),
+  
+  deleteSetting: (key: string) =>
+    api.delete<ApiResponse>(`/settings/${key}`),
+};
+
 // Serviço para verificar conexão com o servidor
 export const serverApi = {
   getServerTime: () =>

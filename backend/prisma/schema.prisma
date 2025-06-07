@@ -31,6 +31,8 @@ model User {
   commandActions  CommandAction[]
   commands        Command[]
   scripts         Script[]
+  auditLogs       AuditLog[]
+  settingsUpdates Setting[]
   
   @@map("users")
 }
@@ -152,6 +154,7 @@ model Script {
   filename    String
   content     String?
   description String?
+  filePath    String?  // Caminho no volume persistente
   uploadedBy  String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
@@ -242,6 +245,36 @@ model EnvironmentVariable {
   
   @@unique([category, key])
   @@map("environment_variables")
+}
+
+// Nova tabela para settings (formato chave-valor)
+model Setting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  group     String   // 'general', 'data_env', 'db_env'
+  updatedBy String
+  updatedAt DateTime @updatedAt
+  
+  // Relacionamentos
+  user      User     @relation(fields: [updatedBy], references: [id], onDelete: Cascade)
+  
+  @@map("settings")
+}
+
+// Nova tabela para audit logs
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String
+  action    String   // 'LOGIN', 'DATABASE_RESTORE', 'SCRIPT_UPLOAD', 'COMMAND_EXECUTE'
+  details   Json?    // Detalhes como "Restaurou o ambiente X", "Executou o comando Y"
+  ipAddress String?
+  createdAt DateTime @default(now())
+  
+  // Relacionamentos
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("audit_logs")
 }
 
 enum Role {

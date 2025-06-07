@@ -20,6 +20,9 @@ const logRoutes = require('./routes/logs');
 const dateActionRoutes = require('./routes/dateActions');
 const databaseActionRoutes = require('./routes/databaseActions');
 const customizationRoutes = require('./routes/customizations');
+const scriptRoutes = require('./routes/scripts');
+const commandRoutes = require('./routes/commands');
+const settingRoutes = require('./routes/settings');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -112,8 +115,10 @@ app.get('/health', (req, res) => {
 app.get('/api/server-time', (req, res) => {
   res.json({
     success: true,
-    serverTime: new Date().toISOString(),
-    timezone: 'America/Bahia'
+    data: {
+      serverTime: new Date().toISOString(),
+      timezone: 'America/Bahia'
+    }
   });
 });
 
@@ -125,6 +130,30 @@ app.use('/api/logs', logRoutes);
 app.use('/api/date-actions', dateActionRoutes);
 app.use('/api/database-actions', databaseActionRoutes);
 app.use('/api/customizations', customizationRoutes);
+app.use('/api/scripts', scriptRoutes);
+app.use('/api/commands', commandRoutes);
+app.use('/api/settings', settingRoutes);
+
+// Rotas de compatibilidade com o frontend antigo
+app.get('/api/scripts', (req, res, next) => {
+  req.url = '/api/scripts';
+  scriptRoutes(req, res, next);
+});
+
+app.post('/api/upload-script', (req, res, next) => {
+  req.url = '/api/scripts/upload';
+  scriptRoutes(req, res, next);
+});
+
+app.post('/api/execute-command', (req, res, next) => {
+  req.url = '/api/commands/execute';
+  commandRoutes(req, res, next);
+});
+
+app.post('/api/save-settings', (req, res, next) => {
+  req.url = '/api/settings';
+  settingRoutes(req, res, next);
+});
 
 // Middleware de tratamento de erros
 app.use((err, req, res, next) => {
@@ -172,6 +201,13 @@ async function startServer() {
       logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
       logger.info(`🔗 Health check: http://localhost:${PORT}/health`);
       logger.info(`🔗 API Base: http://localhost:${PORT}/api`);
+      logger.info(`📂 Rotas disponíveis:`, {
+        auth: '/api/auth',
+        users: '/api/users',
+        scripts: '/api/scripts',
+        commands: '/api/commands',
+        settings: '/api/settings'
+      });
     });
   } catch (error) {
     logger.error('Falha ao iniciar servidor', error);
