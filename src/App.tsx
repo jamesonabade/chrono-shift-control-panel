@@ -10,8 +10,8 @@ function App() {
   console.log('🚀 App iniciando...');
   
   return (
-    <AuthProvider>
-      <Router>
+    <Router>
+      <AuthProvider>
         <div className="App">
           <Routes>
             <Route path="/" element={<Index />} />
@@ -19,8 +19,8 @@ function App() {
           </Routes>
           <Toaster />
         </div>
-      </Router>
-    </AuthProvider>
+      </AuthProvider>
+    </Router>
   );
 }
 
