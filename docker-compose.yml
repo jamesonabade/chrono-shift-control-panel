@@ -34,7 +34,7 @@ services:
       JWT_SECRET: your-super-secret-jwt-key-change-in-production
       JWT_EXPIRES_IN: 24h
       PORT: 3001
-      FRONTEND_URL: http://localhost:5173
+      FRONTEND_URL: http://localhost:8080
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/uploads:/app/uploads
@@ -47,6 +47,11 @@ services:
     networks:
       - dashboard-network
     command: sh -c "npx prisma db push && npm run db:seed && node src/server.js"
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Frontend React
   frontend:
@@ -62,11 +67,16 @@ services:
       - ./src:/app/src
       - ./public:/app/public
     ports:
-      - "5173:5173"
+      - "8080:8080"
     depends_on:
       - backend
     networks:
       - dashboard-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   # Proxy reverso Nginx
   nginx:
@@ -82,6 +92,11 @@ services:
       - backend
     networks:
       - dashboard-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
