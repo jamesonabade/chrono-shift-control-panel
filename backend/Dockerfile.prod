@@ -40,7 +40,7 @@ WORKDIR /app
 RUN mkdir -p /app/scripts /app/logs /app/data
 
 # Copiar arquivos do backend
-COPY package*.json ./
+COPY package.json ./
 RUN npm install --omit=dev
 
 # Copiar código fonte

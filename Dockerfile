@@ -29,8 +29,8 @@ WORKDIR /app
 # Criar diretórios necessários
 RUN mkdir -p /app/scripts /app/logs /app/data
 
-# Copiar apenas package files primeiro
-COPY package*.json ./
+# Copiar apenas package.json primeiro
+COPY package.json ./
 
 # Instalar dependências
 RUN npm ci

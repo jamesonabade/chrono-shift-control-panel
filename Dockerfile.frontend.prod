@@ -30,7 +30,7 @@ WORKDIR /app
 RUN mkdir -p /app/scripts /app/logs /app/data
 
 # Copiar package files primeiro
-COPY package*.json ./
+COPY package.json ./
 
 # Instalar dependências incluindo devDependencies para build
 RUN npm install

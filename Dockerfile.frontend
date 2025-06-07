@@ -1,10 +1,10 @@
 
-FROM node:18-alpine
+FROM node:18-bookworm
 
 WORKDIR /app
 
 # Copiar package files
-COPY package*.json ./
+COPY package.json ./
 
 # Instalar dependências
 RUN npm ci

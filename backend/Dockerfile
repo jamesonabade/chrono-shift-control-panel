@@ -1,19 +1,21 @@
 
-FROM node:18-alpine
+FROM node:18-bookworm
 
 # Instalar dependências do sistema
-RUN apk add --no-cache openssl
+RUN apt-get update && apt-get install -y \
+    openssl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Configurar diretório de trabalho
 WORKDIR /app
 
-# Copiar arquivos de dependências
-COPY package*.json ./
+# Copiar apenas package.json primeiro
+COPY package.json ./
 COPY prisma ./prisma/
 
-# Limpar cache npm e instalar dependências
+# Limpar cache npm e instalar dependências (incluindo devDependencies para desenvolvimento)
 RUN npm cache clean --force && \
-    npm install --omit=dev --no-audit --no-fund
+    npm install
 
 # Gerar cliente Prisma
 RUN npx prisma generate
@@ -25,8 +27,8 @@ COPY src ./src
 RUN mkdir -p logs uploads temp
 
 # Criar usuário não-root
-RUN addgroup -g 1001 -S nodejs
-RUN adduser -S backend -u 1001
+RUN addgroup --gid 1001 nodejs
+RUN adduser --system --uid 1001 backend
 
 # Dar permissões ao usuário
 RUN chown -R backend:nodejs /app
