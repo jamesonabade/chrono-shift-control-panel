@@ -1,31 +1,19 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Upload, Download, FileText, Trash2, Eye, Calendar, Database, Terminal, Play, Edit, Save, X } from 'lucide-react';
-import { getApiEndpoint } from '@/utils/apiEndpoints';
+import { Upload, Download, FileText, Trash2, Play } from 'lucide-react';
 
 interface UploadedScript {
   name: string;
-  type: 'date' | 'database' | 'custom';
+  type: 'date' | 'database';
   size: number;
   uploadDate: string;
 }
 
 const ScriptUpload = () => {
   const [uploadedScripts, setUploadedScripts] = useState<UploadedScript[]>([]);
-  const [previewContent, setPreviewContent] = useState('');
-  const [previewFileName, setPreviewFileName] = useState('');
-  const [showPreview, setShowPreview] = useState(false);
-  const [editContent, setEditContent] = useState('');
-  const [editFileName, setEditFileName] = useState('');
-  const [showEdit, setShowEdit] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<FileList | null>(null);
-  const [selectedType, setSelectedType] = useState<'date' | 'database' | 'custom'>('custom');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -34,103 +22,69 @@ const ScriptUpload = () => {
 
   const loadUploadedScripts = async () => {
     try {
-      const scriptsUrl = getApiEndpoint('/api/scripts');
-      console.log('🔄 Carregando scripts:', scriptsUrl);
-      
-      const response = await fetch(scriptsUrl);
+      const response = await fetch('http://localhost:3001/api/scripts');
       if (response.ok) {
         const scripts = await response.json();
         setUploadedScripts(scripts);
       }
     } catch (error) {
       console.error('Erro ao carregar scripts:', error);
-      toast({
-        title: "Erro de conexão",
-        description: `Não foi possível conectar ao servidor para carregar scripts`,
-        variant: "destructive"
-      });
+      // Fallback para localStorage
+      const saved = localStorage.getItem('uploadedScripts');
+      if (saved) {
+        setUploadedScripts(JSON.parse(saved));
+      }
     }
   };
 
-  const handleMultipleFileUpload = async () => {
-    if (!selectedFiles || selectedFiles.length === 0) {
+  const handleFileUpload = async (file: File, type: 'date' | 'database') => {
+    if (!file.name.endsWith('.sh') && !file.name.endsWith('.bash')) {
       toast({
         title: "Erro",
-        description: "Por favor, selecione pelo menos um arquivo",
+        description: "Por favor, selecione um arquivo .sh ou .bash",
         variant: "destructive"
       });
       return;
     }
 
-    const results = [];
-    for (let i = 0; i < selectedFiles.length; i++) {
-      const file = selectedFiles[i];
-      
-      if (!file.name.endsWith('.sh') && !file.name.endsWith('.bash')) {
-        toast({
-          title: "Arquivo inválido",
-          description: `${file.name} não é um arquivo .sh ou .bash`,
-          variant: "destructive"
-        });
-        continue;
-      }
+    try {
+      const formData = new FormData();
+      formData.append('script', file);
+      formData.append('type', type);
 
-      try {
-        const formData = new FormData();
-        formData.append('script', file);
-        formData.append('type', selectedType);
-
-        const uploadUrl = getApiEndpoint('/api/upload-script');
-        console.log('📤 Enviando script:', uploadUrl);
-
-        const response = await fetch(uploadUrl, {
-          method: 'POST',
-          body: formData
-        });
-
-        if (response.ok) {
-          const result = await response.json();
-          results.push({ success: true, fileName: file.name });
-        } else {
-          results.push({ success: false, fileName: file.name, error: 'Falha no upload' });
-        }
-      } catch (error) {
-        results.push({ success: false, fileName: file.name, error: error instanceof Error ? error.message : 'Erro desconhecido' });
-      }
-    }
-
-    const successCount = results.filter(r => r.success).length;
-    const failCount = results.filter(r => !r.success).length;
-
-    if (successCount > 0) {
-      toast({
-        title: `${successCount} script(s) enviado(s)!`,
-        description: failCount > 0 ? `${failCount} arquivo(s) falharam` : "Todos os scripts foram enviados com sucesso",
+      const response = await fetch('http://localhost:3001/api/upload-script', {
+        method: 'POST',
+        body: formData
       });
-      await loadUploadedScripts();
-    }
 
-    if (failCount > 0) {
-      const failedFiles = results.filter(r => !r.success).map(r => r.fileName).join(', ');
+      if (response.ok) {
+        const result = await response.json();
+        console.log('Script salvo no servidor:', result.path);
+        
+        toast({
+          title: "Script enviado!",
+          description: `${file.name} foi salvo em /app/scripts/`,
+        });
+
+        // Recarrega a lista
+        await loadUploadedScripts();
+      } else {
+        throw new Error('Falha no upload do script');
+      }
+
+    } catch (error) {
+      console.error('Erro no upload:', error);
       toast({
-        title: "Alguns uploads falharam",
-        description: `Arquivos com erro: ${failedFiles}`,
+        title: "Erro",
+        description: "Erro ao fazer upload do script",
         variant: "destructive"
       });
     }
-
-    // Limpar seleção
-    setSelectedFiles(null);
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    if (fileInput) fileInput.value = '';
   };
 
   const handleDownload = async (script: UploadedScript) => {
     try {
-      const downloadUrl = getApiEndpoint(`/api/download-script/${script.name}`);
-      console.log('⬇️ Baixando script:', downloadUrl);
-      
-      const response = await fetch(downloadUrl);
+      const response = await fetch(`http://localhost:3001/api/download-script/${script.name}`);
       if (response.ok) {
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
@@ -161,10 +115,7 @@ const ScriptUpload = () => {
 
   const handleDelete = async (script: UploadedScript) => {
     try {
-      const deleteUrl = getApiEndpoint(`/api/delete-script/${script.name}`);
-      console.log('🗑️ Removendo script:', deleteUrl);
-      
-      const response = await fetch(deleteUrl, {
+      const response = await fetch(`http://localhost:3001/api/delete-script/${script.name}`, {
         method: 'DELETE'
       });
 
@@ -191,10 +142,7 @@ const ScriptUpload = () => {
 
   const handleExecute = async (script: UploadedScript) => {
     try {
-      const executeUrl = getApiEndpoint('/api/execute-script');
-      console.log('▶️ Executando script:', executeUrl);
-      
-      const response = await fetch(executeUrl, {
+      const response = await fetch('http://localhost:3001/api/execute-script', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -229,187 +177,51 @@ const ScriptUpload = () => {
     }
   };
 
-  const handlePreview = async (script: UploadedScript) => {
-    try {
-      const previewUrl = getApiEndpoint(`/api/preview-script/${script.name}`);
-      console.log('👁️ Visualizando script:', previewUrl);
-      
-      const response = await fetch(previewUrl);
-      if (response.ok) {
-        const result = await response.json();
-        setPreviewContent(result.content);
-        setPreviewFileName(result.fileName);
-        setShowPreview(true);
-        
-        toast({
-          title: "Preview carregado!",
-          description: `Conteúdo de ${script.name} carregado`,
-        });
-      } else {
-        throw new Error('Falha ao carregar preview');
-      }
-    } catch (error) {
-      console.error('Erro no preview:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar preview do script",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleEdit = async (script: UploadedScript) => {
-    try {
-      const editUrl = getApiEndpoint(`/api/preview-script/${script.name}`);
-      console.log('✏️ Editando script:', editUrl);
-      
-      const response = await fetch(editUrl);
-      if (response.ok) {
-        const result = await response.json();
-        setEditContent(result.content);
-        setEditFileName(result.fileName);
-        setShowEdit(true);
-      } else {
-        throw new Error('Falha ao carregar script para edição');
-      }
-    } catch (error) {
-      console.error('Erro ao abrir editor:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao abrir editor do script",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleSaveEdit = async () => {
-    try {
-      const blob = new Blob([editContent], { type: 'text/plain' });
-      const file = new File([blob], editFileName, { type: 'text/plain' });
-      
-      const formData = new FormData();
-      formData.append('script', file);
-      formData.append('type', editFileName.toLowerCase().includes('date') || editFileName.toLowerCase().includes('data') ? 'date' : 'database');
-
-      const saveUrl = getApiEndpoint('/api/upload-script');
-      console.log('💾 Salvando alterações:', saveUrl);
-
-      const response = await fetch(saveUrl, {
-        method: 'POST',
-        body: formData
-      });
-
-      if (response.ok) {
-        toast({
-          title: "Script salvo!",
-          description: `${editFileName} foi atualizado com sucesso`,
-        });
-        setShowEdit(false);
-        await loadUploadedScripts();
-      } else {
-        throw new Error('Falha ao salvar script');
-      }
-    } catch (error) {
-      console.error('Erro ao salvar:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao salvar alterações do script",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const getScriptIcon = (type: string) => {
-    switch (type) {
-      case 'date': return <Calendar className="w-5 h-5 text-blue-400" />;
-      case 'database': return <Database className="w-5 h-5 text-green-400" />;
-      default: return <Terminal className="w-5 h-5 text-purple-400" />;
-    }
-  };
-
-  const getScriptTypeLabel = (type: string) => {
-    switch (type) {
-      case 'date': return 'Alteração de Data';
-      case 'database': return 'Restauração de Banco';
-      default: return 'Script Personalizado';
-    }
-  };
-
-  const getScriptTypeBadgeColor = (type: string) => {
-    switch (type) {
-      case 'date': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'database': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      default: return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-    }
-  };
-
   return (
     <div className="space-y-6">
       {/* Upload Section */}
-      <div className="space-y-4">
-        <div className="flex items-center space-x-2">
-          <Upload className="w-5 h-5 text-cyan-400" />
-          <h3 className="text-lg font-semibold text-cyan-400">Upload de Scripts</h3>
-        </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-cyan-400">Script de Alteração de Data</h3>
           <div className="space-y-2">
             <label className="text-sm font-medium text-slate-300">
-              Tipo do Script
+              Upload do script Bash (.sh ou .bash)
             </label>
-            <Select value={selectedType} onValueChange={(value: 'date' | 'database' | 'custom') => setSelectedType(value)}>
-              <SelectTrigger className="bg-slate-700/50 border-slate-600 text-white">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent className="bg-slate-800 border-slate-600">
-                <SelectItem value="custom" className="text-white">Script Personalizado</SelectItem>
-                <SelectItem value="date" className="text-white">Alteração de Data</SelectItem>
-                <SelectItem value="database" className="text-white">Restauração de Banco</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              Arquivos (.sh ou .bash)
-            </label>
-            <Input
-              type="file"
-              accept=".sh,.bash"
-              multiple
-              onChange={(e) => setSelectedFiles(e.target.files)}
-              className="bg-slate-700/50 border-slate-600 text-white file:bg-cyan-500 file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:mr-3"
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-medium text-slate-300">
-              Ação
-            </label>
-            <Button 
-              onClick={handleMultipleFileUpload}
-              className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold"
-              disabled={!selectedFiles || selectedFiles.length === 0}
-            >
-              <Upload className="w-4 h-4 mr-2" />
-              Enviar {selectedFiles ? selectedFiles.length : 0} Arquivo(s)
-            </Button>
-          </div>
-        </div>
-
-        {selectedFiles && selectedFiles.length > 0 && (
-          <div className="p-3 bg-slate-700/30 rounded-lg border border-cyan-500/30">
-            <p className="text-sm text-slate-300 mb-2">Arquivos selecionados:</p>
-            <div className="space-y-1">
-              {Array.from(selectedFiles).map((file, index) => (
-                <div key={index} className="text-xs text-cyan-400 flex items-center">
-                  <FileText className="w-3 h-3 mr-2" />
-                  {file.name} ({(file.size / 1024).toFixed(1)} KB)
-                </div>
-              ))}
+            <div className="relative">
+              <Input
+                type="file"
+                accept=".sh,.bash"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file, 'date');
+                }}
+                className="bg-slate-700/50 border-slate-600 text-white file:bg-cyan-500 file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:mr-3"
+              />
+              <Upload className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
             </div>
           </div>
-        )}
+        </div>
+
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold text-cyan-400">Script de Restauração de Banco</h3>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-slate-300">
+              Upload do script Bash (.sh ou .bash)
+            </label>
+            <div className="relative">
+              <Input
+                type="file"
+                accept=".sh,.bash"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFileUpload(file, 'database');
+                }}
+                className="bg-slate-700/50 border-slate-600 text-white file:bg-cyan-500 file:text-white file:border-0 file:rounded-md file:px-3 file:py-1 file:mr-3"
+              />
+              <Upload className="absolute right-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Uploaded Scripts List */}
@@ -436,15 +248,11 @@ const ScriptUpload = () => {
             {uploadedScripts.map((script, index) => (
               <div key={index} className="flex items-center justify-between p-4 bg-slate-700/30 rounded-lg border border-slate-600/30">
                 <div className="flex items-center space-x-3">
-                  {getScriptIcon(script.type)}
+                  <FileText className="w-6 h-6 text-cyan-400" />
                   <div>
-                    <div className="flex items-center space-x-2 mb-1">
-                      <p className="text-white font-medium">{script.name}</p>
-                      <span className={`px-2 py-1 text-xs rounded-full border ${getScriptTypeBadgeColor(script.type)}`}>
-                        {getScriptTypeLabel(script.type)}
-                      </span>
-                    </div>
+                    <p className="text-white font-medium">{script.name}</p>
                     <p className="text-sm text-slate-400">
+                      {script.type === 'date' ? 'Script de Data' : 'Script de Banco'} • 
                       {(script.size / 1024).toFixed(1)} KB • 
                       {new Date(script.uploadDate).toLocaleDateString('pt-BR')}
                     </p>
@@ -459,24 +267,6 @@ const ScriptUpload = () => {
                     title="Executar Script"
                   >
                     <Play className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    onClick={() => handleEdit(script)}
-                    variant="outline"
-                    size="sm"
-                    className="border-yellow-500/50 text-yellow-400 hover:bg-yellow-500/20"
-                    title="Editar Script"
-                  >
-                    <Edit className="w-4 h-4" />
-                  </Button>
-                  <Button
-                    onClick={() => handlePreview(script)}
-                    variant="outline"
-                    size="sm"
-                    className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                    title="Visualizar Script"
-                  >
-                    <Eye className="w-4 h-4" />
                   </Button>
                   <Button
                     onClick={() => handleDownload(script)}
@@ -508,10 +298,7 @@ const ScriptUpload = () => {
           <p className="text-sm text-slate-300 mb-2">Scripts disponíveis no sistema:</p>
           <ul className="text-xs text-purple-400 space-y-1">
             {uploadedScripts.map((script, index) => (
-              <li key={index} className="flex items-center space-x-2">
-                {getScriptIcon(script.type)}
-                <span>• {script.name} ({getScriptTypeLabel(script.type)})</span>
-              </li>
+              <li key={index}>• {script.name} ({script.type === 'date' ? 'Data' : 'Banco'})</li>
             ))}
           </ul>
           <p className="text-xs text-slate-500 mt-2">
@@ -519,63 +306,6 @@ const ScriptUpload = () => {
           </p>
         </div>
       )}
-
-      {/* Dialog para preview do script */}
-      <Dialog open={showPreview} onOpenChange={setShowPreview}>
-        <DialogContent className="max-w-4xl max-h-[80vh] bg-slate-800 border-cyan-500/30">
-          <DialogHeader>
-            <DialogTitle className="text-cyan-400 flex items-center">
-              <FileText className="w-5 h-5 mr-2" />
-              Preview: {previewFileName}
-            </DialogTitle>
-          </DialogHeader>
-          <ScrollArea className="h-[60vh] w-full rounded-md border border-slate-600/30 p-4">
-            <pre className="text-sm text-slate-300 whitespace-pre-wrap font-mono bg-slate-900/50 p-4 rounded">
-              {previewContent}
-            </pre>
-          </ScrollArea>
-        </DialogContent>
-      </Dialog>
-
-      {/* Dialog para edição do script */}
-      <Dialog open={showEdit} onOpenChange={setShowEdit}>
-        <DialogContent className="max-w-6xl max-h-[90vh] bg-slate-800 border-yellow-500/30">
-          <DialogHeader>
-            <DialogTitle className="text-yellow-400 flex items-center justify-between">
-              <div className="flex items-center">
-                <Edit className="w-5 h-5 mr-2" />
-                Editando: {editFileName}
-              </div>
-              <div className="flex space-x-2">
-                <Button
-                  onClick={handleSaveEdit}
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <Save className="w-4 h-4 mr-2" />
-                  Salvar
-                </Button>
-                <Button
-                  onClick={() => setShowEdit(false)}
-                  variant="outline"
-                  size="sm"
-                  className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                >
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            </DialogTitle>
-          </DialogHeader>
-          <div className="h-[70vh] w-full">
-            <Textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="h-full w-full bg-slate-900/50 border-slate-600/30 text-slate-300 font-mono text-sm resize-none"
-              placeholder="Conteúdo do script..."
-            />
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

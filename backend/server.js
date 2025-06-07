@@ -1,410 +1,329 @@
 
 const express = require('express');
-const cors = require('cors');
 const multer = require('multer');
-const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
+const path = require('path');
+const { exec } = require('child_process');
+const cors = require('cors');
 
 const app = express();
-const PORT = process.env.PORT || 3001;
-
-// Configurações de ambiente
-const NODE_ENV = process.env.NODE_ENV || 'development';
-const DATA_DIR = process.env.DATA_DIR || '/app/data';
-const SCRIPTS_DIR = process.env.SCRIPTS_DIR || '/app/scripts';
-const LOGS_DIR = process.env.LOGS_DIR || '/app/logs';
-const UPLOADS_DIR = process.env.UPLOADS_DIR || '/app/uploads';
-
-// Criar diretórios necessários
-const createDirectories = () => {
-  const dirs = [DATA_DIR, SCRIPTS_DIR, LOGS_DIR, UPLOADS_DIR];
-  dirs.forEach(dir => {
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-      console.log(`📁 Diretório criado: ${dir}`);
-    }
-  });
-};
-
-// Inicializar configurações padrão
-const initializeDefaultConfig = () => {
-  const configFile = path.join(DATA_DIR, 'system-config.json');
-  
-  if (!fs.existsSync(configFile)) {
-    const defaultConfig = {
-      users: {
-        'administrador': 'admin123',
-        'usuario': 'user123'
-      },
-      permissions: {
-        'usuario': {
-          date: true,
-          database: false,
-          scripts: true,
-          users: false,
-          logs: true
-        }
-      },
-      customizations: {
-        background: '',
-        logo: '',
-        favicon: '',
-        title: 'PAINEL DE CONTROLE',
-        subtitle: 'Sistema de Gerenciamento Docker'
-      },
-      systemVariables: {},
-      lastUpdated: new Date().toISOString()
-    };
-    
-    fs.writeFileSync(configFile, JSON.stringify(defaultConfig, null, 2));
-    console.log('✅ Configuração padrão criada');
-  }
-};
+const PORT = 3001;
 
 // Middleware
-app.use(cors({
-  origin: true,
-  credentials: true
-}));
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+app.use(cors());
+app.use(express.json());
 
-// Servir uploads estáticos
-app.use('/uploads', express.static(UPLOADS_DIR));
-
-// Configuração do multer para uploads
+// Configuração do multer para upload de scripts
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, UPLOADS_DIR);
+    const uploadDir = '/app/scripts';
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+    cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
-    const timestamp = Date.now();
-    cb(null, `${timestamp}-${file.originalname}`);
+    cb(null, file.originalname);
   }
 });
 
-const upload = multer({ 
-  storage,
-  limits: { fileSize: 100 * 1024 * 1024 } // 100MB
-});
+const upload = multer({ storage });
 
-// Utilitários para gerenciar configurações
-const getConfig = () => {
-  const configFile = path.join(DATA_DIR, 'system-config.json');
-  if (fs.existsSync(configFile)) {
-    return JSON.parse(fs.readFileSync(configFile, 'utf8'));
-  }
-  return null;
-};
-
-const saveConfig = (config) => {
-  const configFile = path.join(DATA_DIR, 'system-config.json');
-  config.lastUpdated = new Date().toISOString();
-  fs.writeFileSync(configFile, JSON.stringify(config, null, 2));
-};
-
-// Logs centralizados
-const logAction = (action, details, user = 'system') => {
+// Função para logging
+const logAction = (action, details) => {
   const logEntry = {
     timestamp: new Date().toISOString(),
     action,
-    details,
-    user
+    details
   };
   
-  const logsFile = path.join(LOGS_DIR, 'system-logs.json');
-  let logs = [];
+  console.log(`[${action}]`, JSON.stringify(details));
   
-  if (fs.existsSync(logsFile)) {
-    try {
-      logs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
-    } catch (error) {
-      console.error('Erro ao ler logs:', error);
-    }
-  }
+  const logFile = '/app/logs/backend.log';
+  const logLine = `${logEntry.timestamp} - ${action}: ${JSON.stringify(details)}\n`;
   
-  logs.push(logEntry);
-  logs = logs.slice(-1000); // Manter apenas últimos 1000 logs
-  
-  fs.writeFileSync(logsFile, JSON.stringify(logs, null, 2));
+  fs.appendFile(logFile, logLine, (err) => {
+    if (err) console.error('Erro ao escrever log:', err);
+  });
 };
 
-// === ENDPOINTS DE CONFIGURAÇÃO ===
-
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    environment: NODE_ENV,
-    version: '1.0.0'
-  });
-});
-
-// Autenticação
-app.post('/api/auth/login', (req, res) => {
-  const { username, password } = req.body;
-  const config = getConfig();
-  
-  if (!config || !config.users[username] || config.users[username] !== password) {
-    logAction('LOGIN_FAILED', { username, ip: req.ip });
-    return res.status(401).json({ error: 'Credenciais inválidas' });
-  }
-  
-  logAction('LOGIN_SUCCESS', { username, ip: req.ip }, username);
-  
-  res.json({ 
-    success: true, 
-    user: username,
-    permissions: config.permissions[username] || {}
-  });
-});
-
-// Gerenciar usuários
-app.get('/api/users', (req, res) => {
-  const config = getConfig();
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  const users = Object.keys(config.users).map(username => ({
-    username,
-    permissions: config.permissions[username] || {}
-  }));
-  
-  res.json(users);
-});
-
-app.post('/api/users', (req, res) => {
-  const { username, password, permissions } = req.body;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  config.users[username] = password;
-  if (permissions) {
-    config.permissions[username] = permissions;
-  }
-  
-  saveConfig(config);
-  logAction('USER_CREATED', { username }, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
-});
-
-app.delete('/api/users/:username', (req, res) => {
-  const { username } = req.params;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  delete config.users[username];
-  delete config.permissions[username];
-  
-  saveConfig(config);
-  logAction('USER_DELETED', { username }, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
-});
-
-// Personalizações
-app.get('/api/customizations', (req, res) => {
-  const config = getConfig();
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  res.json(config.customizations || {});
-});
-
-app.post('/api/customizations', (req, res) => {
-  const customizations = req.body;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  config.customizations = { ...config.customizations, ...customizations };
-  saveConfig(config);
-  
-  logAction('CUSTOMIZATIONS_UPDATED', customizations, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
-});
-
-// Variáveis do sistema
-app.get('/api/system-variables', (req, res) => {
-  const config = getConfig();
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  res.json(config.systemVariables || {});
-});
-
-app.post('/api/system-variables', (req, res) => {
-  const variables = req.body;
-  const config = getConfig();
-  
-  if (!config) return res.status(500).json({ error: 'Configuração não encontrada' });
-  
-  config.systemVariables = variables;
-  saveConfig(config);
-  
-  logAction('SYSTEM_VARIABLES_UPDATED', variables, req.headers['x-user'] || 'system');
-  
-  res.json({ success: true });
-});
-
-// Logs do sistema
-app.get('/api/logs', (req, res) => {
-  const logsFile = path.join(LOGS_DIR, 'system-logs.json');
-  
-  if (!fs.existsSync(logsFile)) {
-    return res.json([]);
-  }
-  
+// Definir variáveis de ambiente
+app.post('/api/set-env', (req, res) => {
   try {
-    const logs = JSON.parse(fs.readFileSync(logsFile, 'utf8'));
-    res.json(logs.slice(-100)); // Últimos 100 logs
+    const envVars = req.body;
+    const envFile = '/app/scripts/.env';
+    
+    let envContent = '';
+    Object.entries(envVars).forEach(([key, value]) => {
+      process.env[key] = value;
+      envContent += `export ${key}="${value}"\n`;
+    });
+    
+    fs.writeFileSync(envFile, envContent);
+    
+    logAction('SET_ENV_VARIABLES', { variables: envVars, envFile });
+    
+    res.json({ success: true, envFile, variables: envVars });
   } catch (error) {
-    console.error('Erro ao ler logs:', error);
-    res.status(500).json({ error: 'Erro ao carregar logs' });
+    logAction('SET_ENV_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Upload de scripts
+// Upload de script
 app.post('/api/upload-script', upload.single('script'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).json({ error: 'Nenhum arquivo enviado' });
-  }
-  
-  const scriptPath = path.join(SCRIPTS_DIR, req.file.originalname);
-  
   try {
-    fs.copyFileSync(req.file.path, scriptPath);
-    fs.unlinkSync(req.file.path); // Remove arquivo temporário
+    if (!req.file) {
+      return res.status(400).json({ success: false, error: 'Nenhum arquivo enviado' });
+    }
+
+    const { type } = req.body;
+    const fileName = req.file.filename;
+    const filePath = req.file.path;
     
     // Dar permissão de execução
-    try {
-      execSync(`chmod +x "${scriptPath}"`);
-    } catch (chmodError) {
-      console.warn('Aviso: Não foi possível definir permissão de execução:', chmodError.message);
-    }
+    fs.chmodSync(filePath, '755');
     
-    logAction('SCRIPT_UPLOADED', { filename: req.file.originalname }, req.headers['x-user'] || 'system');
+    logAction('SCRIPT_UPLOADED', {
+      fileName,
+      type,
+      path: filePath,
+      size: req.file.size
+    });
     
-    res.json({ 
-      success: true, 
-      filename: req.file.originalname,
-      path: scriptPath
+    res.json({
+      success: true,
+      fileName,
+      type,
+      path: filePath,
+      size: req.file.size
     });
   } catch (error) {
-    console.error('Erro ao salvar script:', error);
-    res.status(500).json({ error: 'Erro ao salvar script' });
+    logAction('SCRIPT_UPLOAD_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
 // Listar scripts
 app.get('/api/scripts', (req, res) => {
   try {
-    if (!fs.existsSync(SCRIPTS_DIR)) {
-      return res.json([]);
+    const scriptsDir = '/app/scripts';
+    
+    if (!fs.existsSync(scriptsDir)) {
+      fs.mkdirSync(scriptsDir, { recursive: true });
     }
     
-    const files = fs.readdirSync(SCRIPTS_DIR);
-    const scripts = files.map(file => {
-      const filePath = path.join(SCRIPTS_DIR, file);
-      const stats = fs.statSync(filePath);
-      
-      return {
-        name: file,
-        size: stats.size,
-        modified: stats.mtime,
-        executable: !!(stats.mode & parseInt('111', 8))
-      };
-    });
+    const files = fs.readdirSync(scriptsDir);
+    const scripts = files
+      .filter(file => file.endsWith('.sh') || file.endsWith('.bash'))
+      .map(file => {
+        const filePath = path.join(scriptsDir, file);
+        const stats = fs.statSync(filePath);
+        
+        // Determinar tipo baseado no nome do arquivo
+        let type = 'unknown';
+        if (file.toLowerCase().includes('date') || file.toLowerCase().includes('data')) {
+          type = 'date';
+        } else if (file.toLowerCase().includes('database') || file.toLowerCase().includes('banco') || file.toLowerCase().includes('db')) {
+          type = 'database';
+        }
+        
+        return {
+          name: file,
+          type,
+          size: stats.size,
+          uploadDate: stats.mtime.toISOString()
+        };
+      });
     
     res.json(scripts);
   } catch (error) {
-    console.error('Erro ao listar scripts:', error);
-    res.status(500).json({ error: 'Erro ao listar scripts' });
+    logAction('LIST_SCRIPTS_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Executar comando/script
-app.post('/api/execute-command', (req, res) => {
-  const { command, type } = req.body;
-  
-  if (!command) {
-    return res.status(400).json({ error: 'Comando não fornecido' });
-  }
-  
+// Download de script
+app.get('/api/download-script/:filename', (req, res) => {
   try {
-    let fullCommand = command;
+    const fileName = req.params.filename;
+    const filePath = path.join('/app/scripts', fileName);
     
-    if (type === 'script') {
-      const scriptPath = path.join(SCRIPTS_DIR, command);
-      if (!fs.existsSync(scriptPath)) {
-        return res.status(404).json({ error: 'Script não encontrado' });
-      }
-      fullCommand = `bash "${scriptPath}"`;
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'Arquivo não encontrado' });
     }
     
-    const result = execSync(fullCommand, { 
-      timeout: 300000, // 5 minutos
-      encoding: 'utf8',
-      maxBuffer: 1024 * 1024 * 10 // 10MB
-    });
+    logAction('SCRIPT_DOWNLOADED', { fileName });
     
-    logAction('COMMAND_EXECUTED', { command: fullCommand, type }, req.headers['x-user'] || 'system');
-    
-    res.json({ 
-      success: true, 
-      output: result,
-      command: fullCommand
-    });
+    res.download(filePath, fileName);
   } catch (error) {
-    logAction('COMMAND_FAILED', { command, error: error.message }, req.headers['x-user'] || 'system');
-    
-    res.status(500).json({ 
-      error: error.message,
-      output: error.stdout || '',
-      stderr: error.stderr || ''
-    });
+    logAction('SCRIPT_DOWNLOAD_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
-// Middleware de erro global
-app.use((error, req, res, next) => {
-  console.error('Erro não tratado:', error);
-  logAction('SERVER_ERROR', { error: error.message, stack: error.stack });
-  res.status(500).json({ error: 'Erro interno do servidor' });
+// Deletar script
+app.delete('/api/delete-script/:filename', (req, res) => {
+  try {
+    const fileName = req.params.filename;
+    const filePath = path.join('/app/scripts', fileName);
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, error: 'Arquivo não encontrado' });
+    }
+    
+    fs.unlinkSync(filePath);
+    
+    logAction('SCRIPT_DELETED', { fileName });
+    
+    res.json({ success: true, message: 'Script removido com sucesso' });
+  } catch (error) {
+    logAction('SCRIPT_DELETE_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
-// Inicialização
-const startServer = () => {
-  createDirectories();
-  initializeDefaultConfig();
+// Executar script com variáveis de ambiente
+app.post('/api/execute-script', (req, res) => {
+  try {
+    const { scriptName, environment = {}, action } = req.body;
+    const scriptPath = path.join('/app/scripts', scriptName);
+    
+    if (!fs.existsSync(scriptPath)) {
+      return res.status(404).json({ 
+        success: false, 
+        error: 'Script não encontrado',
+        message: 'O script necessário não foi carregado. Por favor, faça o upload do script antes de executar esta ação.'
+      });
+    }
+    
+    // Criar arquivo .env com as variáveis
+    const envFile = '/app/scripts/.env';
+    let envContent = '';
+    Object.entries(environment).forEach(([key, value]) => {
+      envContent += `export ${key}="${value}"\n`;
+    });
+    
+    fs.writeFileSync(envFile, envContent);
+    
+    const logFile = `/app/logs/execution_${Date.now()}.log`;
+    const command = `cd /app/scripts && source .env && bash ${scriptName}`;
+    
+    logAction('SCRIPT_EXECUTION_START', {
+      scriptName,
+      action,
+      environment,
+      command
+    });
+    
+    exec(command, { 
+      cwd: '/app/scripts',
+      env: { ...process.env, ...environment }
+    }, (error, stdout, stderr) => {
+      const logContent = `
+Execution Time: ${new Date().toISOString()}
+Action: ${action}
+Script: ${scriptName}
+Command: ${command}
+Environment Variables: ${JSON.stringify(environment, null, 2)}
+Exit Code: ${error ? error.code || 1 : 0}
+
+STDOUT:
+${stdout}
+
+STDERR:
+${stderr}
+
+ERROR:
+${error ? error.message : 'None'}
+      `.trim();
+      
+      fs.writeFileSync(logFile, logContent);
+      
+      if (error) {
+        logAction('SCRIPT_EXECUTION_ERROR', {
+          scriptName,
+          action,
+          error: error.message,
+          exitCode: error.code,
+          logFile
+        });
+        
+        res.status(500).json({
+          success: false,
+          error: error.message,
+          stderr,
+          logFile,
+          exitCode: error.code
+        });
+      } else {
+        logAction('SCRIPT_EXECUTION_SUCCESS', {
+          scriptName,
+          action,
+          stdout,
+          logFile
+        });
+        
+        res.json({
+          success: true,
+          output: stdout,
+          stderr,
+          logFile,
+          message: `${action} executado com sucesso`
+        });
+      }
+    });
+    
+  } catch (error) {
+    logAction('SCRIPT_EXECUTION_SETUP_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Verificar se script existe
+app.get('/api/check-script/:type', (req, res) => {
+  try {
+    const type = req.params.type;
+    const scriptsDir = '/app/scripts';
+    
+    if (!fs.existsSync(scriptsDir)) {
+      return res.json({ exists: false, script: null });
+    }
+    
+    const files = fs.readdirSync(scriptsDir);
+    const script = files.find(file => {
+      const fileName = file.toLowerCase();
+      if (type === 'date') {
+        return fileName.includes('date') || fileName.includes('data');
+      } else if (type === 'database') {
+        return fileName.includes('database') || fileName.includes('banco') || fileName.includes('db');
+      }
+      return false;
+    });
+    
+    res.json({ 
+      exists: !!script, 
+      script: script || null,
+      type 
+    });
+  } catch (error) {
+    logAction('CHECK_SCRIPT_ERROR', { error: error.message });
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Iniciar servidor
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Backend servidor rodando na porta ${PORT}`);
   
-  console.log('🚀 Iniciando servidor backend...');
-  console.log(`📁 Diretório de dados: ${DATA_DIR}`);
-  console.log(`📁 Diretório de scripts: ${SCRIPTS_DIR}`);
-  console.log(`📁 Diretório de logs: ${LOGS_DIR}`);
-  console.log(`📁 Diretório de uploads: ${UPLOADS_DIR}`);
-  console.log(`🌍 Ambiente: ${NODE_ENV}`);
-  
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`✅ Servidor rodando na porta ${PORT}`);
-    logAction('SERVER_STARTED', { port: PORT, environment: NODE_ENV });
+  // Criar diretórios necessários
+  const dirs = ['/app/scripts', '/app/logs'];
+  dirs.forEach(dir => {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+      console.log(`Diretório criado: ${dir}`);
+    }
   });
-};
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('📤 Recebido SIGTERM, encerrando servidor...');
-  logAction('SERVER_SHUTDOWN', { signal: 'SIGTERM' });
-  process.exit(0);
+  
+  logAction('SERVER_STARTED', { port: PORT, timestamp: new Date().toISOString() });
 });
-
-process.on('SIGINT', () => {
-  console.log('📤 Recebido SIGINT, encerrando servidor...');
-  logAction('SERVER_SHUTDOWN', { signal: 'SIGINT' });
-  process.exit(0);
-});
-
-startServer();
