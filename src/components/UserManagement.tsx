@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +5,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Edit, Trash2, Save } from 'lucide-react';
+import { Users, UserPlus, Edit, Trash, Save } from 'lucide-react';
+import PasswordChange from '@/components/PasswordChange';
 
 interface User {
   username: string;
@@ -91,6 +91,16 @@ const UserManagement = () => {
       
       setUsers(combinedUsers);
     }
+  };
+
+  const handlePasswordUpdate = (username: string, newPassword: string) => {
+    setUsers(prev => ({
+      ...prev,
+      [username]: {
+        ...prev[username],
+        password: newPassword
+      }
+    }));
   };
 
   const saveUsers = () => {
@@ -226,6 +236,9 @@ const UserManagement = () => {
     return labels[key] || key;
   };
 
+  const currentUser = localStorage.getItem('currentUser');
+  const isAdmin = currentUser === 'administrador';
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -310,6 +323,11 @@ const UserManagement = () => {
                   )}
                 </h4>
                 <div className="flex space-x-2">
+                  <PasswordChange 
+                    username={username}
+                    isAdmin={isAdmin}
+                    onPasswordUpdate={handlePasswordUpdate}
+                  />
                   {username !== 'administrador' && (
                     <>
                       <Button
@@ -326,7 +344,7 @@ const UserManagement = () => {
                         size="sm"
                         className="border-red-500/50 text-red-400 hover:bg-red-500/20"
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash className="w-4 h-4" />
                       </Button>
                     </>
                   )}

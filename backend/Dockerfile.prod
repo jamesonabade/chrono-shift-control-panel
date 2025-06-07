@@ -41,7 +41,7 @@ RUN mkdir -p /app/scripts /app/logs /app/data
 
 # Copiar arquivos do backend
 COPY package*.json ./
-RUN npm ci --only=production
+RUN npm install --omit=dev
 
 # Copiar código fonte
 COPY . .
