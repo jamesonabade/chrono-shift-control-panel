@@ -25,6 +25,40 @@ export const getApiConfig = (): ApiConfig => {
   console.log(`  Port: ${port}`);
   console.log(`  Pathname: ${pathname}`);
   
+  // Verificar se há variáveis de ambiente definidas - priorizar estas
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  const envBasePath = import.meta.env.VITE_BASE_PATH;
+  
+  console.log(`  VITE_API_URL: ${envApiUrl || 'não definido'}`);
+  console.log(`  VITE_BASE_PATH: ${envBasePath || 'não definido'}`);
+  
+  // Se VITE_API_URL está definido, usar ele como base
+  if (envApiUrl) {
+    let baseUrl: string;
+    let healthUrl: string;
+    
+    if (envApiUrl.startsWith('http')) {
+      // URL absoluta
+      baseUrl = envApiUrl.replace('/api', '');
+      healthUrl = `${envApiUrl}/health`;
+    } else {
+      // URL relativa (ex: /api ou /scripts/api)
+      baseUrl = `${protocol}//${hostname}${port && port !== '80' && port !== '443' ? `:${port}` : ''}`;
+      healthUrl = `${baseUrl}${envApiUrl}/health`;
+    }
+    
+    const config: ApiConfig = {
+      baseUrl,
+      healthUrl,
+      environment: 'production'
+    };
+    
+    console.log('✅ Ambiente: CONFIGURADO POR VARIÁVEIS DE AMBIENTE');
+    console.log(`  API Base URL: ${config.baseUrl}`);
+    console.log(`  Health URL: ${config.healthUrl}`);
+    return config;
+  }
+  
   // 1. DESENVOLVIMENTO LOCAL (fora do Docker)
   if ((hostname === 'localhost' || hostname === '127.0.0.1') && port === '8080') {
     const config: ApiConfig = {
@@ -49,10 +83,9 @@ export const getApiConfig = (): ApiConfig => {
     return config;
   }
   
-  // 3. PRODUÇÃO (domínio personalizado)
+  // 3. PRODUÇÃO (domínio personalizado) - detecção automática
   // Detectar se há um contexto/subpath (ex: /scripts)
   let basePath = '';
-  const envBasePath = import.meta.env.VITE_BASE_PATH;
   
   if (envBasePath && envBasePath !== '/') {
     basePath = envBasePath;
@@ -70,7 +103,7 @@ export const getApiConfig = (): ApiConfig => {
     environment: 'production'
   };
   
-  console.log('✅ Ambiente: PRODUÇÃO');
+  console.log('✅ Ambiente: PRODUÇÃO (AUTO-DETECTADO)');
   console.log(`  Base Path: ${basePath || '(raiz)'}`);
   console.log(`  API Base URL: ${config.baseUrl}`);
   console.log(`  Health URL: ${config.healthUrl}`);
@@ -83,9 +116,19 @@ export const getApiConfig = (): ApiConfig => {
  */
 export const getApiBaseUrl = (): string => {
   const config = getApiConfig();
-  const basePath = import.meta.env.VITE_BASE_PATH;
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  
+  // Se VITE_API_URL está definido, usar ele
+  if (envApiUrl) {
+    if (envApiUrl.startsWith('http')) {
+      return envApiUrl.replace('/api', '');
+    } else {
+      return config.baseUrl;
+    }
+  }
   
   // Para produção com subpath
+  const basePath = import.meta.env.VITE_BASE_PATH;
   if (config.environment === 'production' && basePath && basePath !== '/') {
     return `${config.baseUrl}${basePath}`;
   }
@@ -97,6 +140,26 @@ export const getApiBaseUrl = (): string => {
  * Retorna a URL completa para um endpoint específico
  */
 export const getApiEndpoint = (endpoint: string): string => {
+  const envApiUrl = import.meta.env.VITE_API_URL;
+  
+  // Se VITE_API_URL está definido, usar ele como base
+  if (envApiUrl) {
+    const cleanEndpoint = endpoint.startsWith('/api') ? endpoint.replace('/api', '') : endpoint;
+    
+    if (envApiUrl.startsWith('http')) {
+      // URL absoluta
+      return `${envApiUrl}${cleanEndpoint}`;
+    } else {
+      // URL relativa
+      const { protocol } = window.location;
+      const hostname = window.location.hostname;
+      const port = window.location.port;
+      const baseUrl = `${protocol}//${hostname}${port && port !== '80' && port !== '443' ? `:${port}` : ''}`;
+      return `${baseUrl}${envApiUrl}${cleanEndpoint}`;
+    }
+  }
+  
+  // Fallback para lógica antiga
   const baseUrl = getApiBaseUrl();
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
   return `${baseUrl}${cleanEndpoint}`;
