@@ -11,8 +11,9 @@ WORKDIR /app
 COPY package*.json ./
 COPY prisma ./prisma/
 
-# Instalar dependências
-RUN npm install --omit=dev
+# Limpar cache npm e instalar dependências
+RUN npm cache clean --force && \
+    npm install --omit=dev --no-audit --no-fund
 
 # Gerar cliente Prisma
 RUN npx prisma generate
