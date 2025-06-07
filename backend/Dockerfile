@@ -1,7 +1,7 @@
 
-FROM docker:25-cli AS docker-cli
+FROM docker:25 AS docker-cli
 
-FROM node:20-bookworm
+FROM node:18-bookworm
 
 # Copiar Docker CLI do estágio anterior
 COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
@@ -14,7 +14,6 @@ RUN apt-get update && apt-get install -y \
     curl \
     sudo \
     tini \
-    dos2unix \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -49,9 +48,9 @@ RUN npm install
 COPY . .
 
 # Dar permissões completas
-RUN chmod -R 755 /app/scripts 2>/dev/null || true && \
-    chmod -R 755 /app/logs 2>/dev/null || true && \
-    chmod -R 755 /app/data 2>/dev/null || true
+RUN chmod -R 755 /app/scripts 2>/dev/null || true
+RUN chmod -R 755 /app/logs 2>/dev/null || true
+RUN chmod -R 755 /app/data 2>/dev/null || true
 
 # Expor porta
 EXPOSE 3001
