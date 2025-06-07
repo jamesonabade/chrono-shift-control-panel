@@ -46,7 +46,7 @@ services:
         condition: service_healthy
     networks:
       - dashboard-network
-    command: sh -c "npx prisma migrate deploy && npm run db:seed && npm run dev"
+    command: sh -c "npx prisma db push && npm run db:seed && npm run dev"
 
   # Frontend React
   frontend:
@@ -90,3 +90,4 @@ volumes:
 networks:
   dashboard-network:
     driver: bridge
+
