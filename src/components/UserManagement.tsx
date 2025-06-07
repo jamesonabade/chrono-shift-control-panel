@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -5,12 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Users, UserPlus, Edit, Trash, Save } from 'lucide-react';
-import PasswordChange from '@/components/PasswordChange';
+import { Users, UserPlus, Edit, Trash, Save, Loader } from 'lucide-react';
+import { getApiEndpoint } from '@/utils/apiEndpoints';
 
 interface User {
   username: string;
-  password: string;
   permissions: {
     date: boolean;
     database: boolean;
@@ -20,10 +20,12 @@ interface User {
     logs: boolean;
     config: boolean;
   };
+  created_at?: string;
 }
 
 const UserManagement = () => {
-  const [users, setUsers] = useState<Record<string, User>>({});
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newUser, setNewUser] = useState({
     username: '',
     password: '',
@@ -45,85 +47,38 @@ const UserManagement = () => {
     loadUsers();
   }, []);
 
-  const loadUsers = () => {
-    // Carregar credenciais
-    const savedCredentials = localStorage.getItem('userCredentials');
-    const savedPermissions = localStorage.getItem('userPermissions');
-    
-    if (savedCredentials) {
-      const credentials = JSON.parse(savedCredentials);
-      const permissions = JSON.parse(savedPermissions || '{}');
-      
-      const combinedUsers: Record<string, User> = {};
-      
-      // Incluir todos os usuários, incluindo administrador e usuario padrão
-      Object.keys(credentials).forEach(username => {
-        if (username === 'administrador') {
-          combinedUsers[username] = {
-            username,
-            password: credentials[username],
-            permissions: {
-              date: true,
-              database: true,
-              scripts: true,
-              commands: true,
-              users: true,
-              logs: true,
-              config: true
-            }
-          };
-        } else {
-          combinedUsers[username] = {
-            username,
-            password: credentials[username],
-            permissions: permissions[username] || {
-              date: false,
-              database: false,
-              scripts: false,
-              commands: false,
-              users: false,
-              logs: false,
-              config: false
-            }
-          };
+  const loadUsers = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch(getApiEndpoint('/api/users'), {
+        headers: {
+          'x-user': localStorage.getItem('currentUser') || 'system'
         }
       });
       
-      setUsers(combinedUsers);
+      if (response.ok) {
+        const userData = await response.json();
+        setUsers(userData);
+      } else {
+        toast({
+          title: "Erro",
+          description: "Não foi possível carregar usuários",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao carregar usuários:', error);
+      toast({
+        title: "Erro",
+        description: "Erro de conexão ao carregar usuários",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handlePasswordUpdate = (username: string, newPassword: string) => {
-    setUsers(prev => ({
-      ...prev,
-      [username]: {
-        ...prev[username],
-        password: newPassword
-      }
-    }));
-  };
-
-  const saveUsers = () => {
-    const usersData: Record<string, string> = {};
-    const permissionsData: Record<string, any> = {};
-    
-    Object.values(users).forEach(user => {
-      usersData[user.username] = user.password;
-      if (user.username !== 'administrador') {
-        permissionsData[user.username] = user.permissions;
-      }
-    });
-    
-    localStorage.setItem('userCredentials', JSON.stringify(usersData));
-    localStorage.setItem('userPermissions', JSON.stringify(permissionsData));
-    
-    toast({
-      title: "Usuários salvos!",
-      description: "Alterações foram aplicadas com sucesso",
-    });
-  };
-
-  const addUser = () => {
+  const addUser = async () => {
     if (!newUser.username || !newUser.password) {
       toast({
         title: "Erro",
@@ -133,43 +88,57 @@ const UserManagement = () => {
       return;
     }
 
-    if (users[newUser.username]) {
+    try {
+      const response = await fetch(getApiEndpoint('/api/users'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user': localStorage.getItem('currentUser') || 'system'
+        },
+        body: JSON.stringify(newUser)
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await loadUsers(); // Recarregar lista
+        setNewUser({
+          username: '',
+          password: '',
+          permissions: {
+            date: false,
+            database: false,
+            scripts: false,
+            commands: false,
+            users: false,
+            logs: false,
+            config: false
+          }
+        });
+        setShowAddDialog(false);
+        
+        toast({
+          title: "Usuário adicionado!",
+          description: `${newUser.username} foi criado com sucesso`,
+        });
+      } else {
+        toast({
+          title: "Erro",
+          description: data.error || "Erro ao criar usuário",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao criar usuário:', error);
       toast({
         title: "Erro",
-        description: "Este usuário já existe",
+        description: "Erro de conexão ao criar usuário",
         variant: "destructive"
       });
-      return;
     }
-
-    setUsers(prev => ({
-      ...prev,
-      [newUser.username]: { ...newUser }
-    }));
-
-    setNewUser({
-      username: '',
-      password: '',
-      permissions: {
-        date: false,
-        database: false,
-        scripts: false,
-        commands: false,
-        users: false,
-        logs: false,
-        config: false
-      }
-    });
-    
-    setShowAddDialog(false);
-    
-    toast({
-      title: "Usuário adicionado!",
-      description: `${newUser.username} foi criado com sucesso`,
-    });
   };
 
-  const deleteUser = (username: string) => {
+  const deleteUser = async (username: string) => {
     if (username === 'administrador') {
       toast({
         title: "Erro",
@@ -179,19 +148,40 @@ const UserManagement = () => {
       return;
     }
 
-    setUsers(prev => {
-      const newUsers = { ...prev };
-      delete newUsers[username];
-      return newUsers;
-    });
-    
-    toast({
-      title: "Usuário removido!",
-      description: `${username} foi removido do sistema`,
-    });
+    try {
+      const response = await fetch(getApiEndpoint(`/api/users/${username}`), {
+        method: 'DELETE',
+        headers: {
+          'x-user': localStorage.getItem('currentUser') || 'system'
+        }
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await loadUsers(); // Recarregar lista
+        toast({
+          title: "Usuário removido!",
+          description: `${username} foi removido do sistema`,
+        });
+      } else {
+        toast({
+          title: "Erro",
+          description: data.error || "Erro ao remover usuário",
+          variant: "destructive"
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao remover usuário:', error);
+      toast({
+        title: "Erro",
+        description: "Erro de conexão ao remover usuário",
+        variant: "destructive"
+      });
+    }
   };
 
-  const updatePermission = (username: string, permission: keyof User['permissions'], value: boolean) => {
+  const updatePermission = async (username: string, permission: keyof User['permissions'], value: boolean) => {
     if (username === 'administrador') {
       toast({
         title: "Aviso",
@@ -201,26 +191,47 @@ const UserManagement = () => {
       return;
     }
 
-    setUsers(prev => ({
-      ...prev,
-      [username]: {
-        ...prev[username],
-        permissions: {
-          ...prev[username].permissions,
-          [permission]: value
-        }
-      }
-    }));
-  };
+    const user = users.find(u => u.username === username);
+    if (!user) return;
 
-  const updatePassword = (username: string, newPassword: string) => {
-    setUsers(prev => ({
-      ...prev,
-      [username]: {
-        ...prev[username],
-        password: newPassword
+    const updatedPermissions = {
+      ...user.permissions,
+      [permission]: value
+    };
+
+    try {
+      const response = await fetch(getApiEndpoint(`/api/users/${username}`), {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-user': localStorage.getItem('currentUser') || 'system'
+        },
+        body: JSON.stringify({ permissions: updatedPermissions })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        await loadUsers(); // Recarregar lista
+        toast({
+          title: "Permissão atualizada!",
+          description: `Permissão ${permission} para ${username} foi ${value ? 'concedida' : 'removida'}`,
+        });
+      } else {
+        toast({
+          title: "Erro",
+          description: data.error || "Erro ao atualizar permissão",
+          variant: "destructive"
+        });
       }
-    }));
+    } catch (error) {
+      console.error('Erro ao atualizar permissão:', error);
+      toast({
+        title: "Erro",
+        description: "Erro de conexão ao atualizar permissão",
+        variant: "destructive"
+      });
+    }
   };
 
   const getPermissionLabel = (key: string) => {
@@ -238,6 +249,15 @@ const UserManagement = () => {
 
   const currentUser = localStorage.getItem('currentUser');
   const isAdmin = currentUser === 'administrador';
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader className="w-8 h-8 animate-spin text-emerald-400" />
+        <span className="ml-2 text-slate-400">Carregando usuários...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -305,65 +325,36 @@ const UserManagement = () => {
       </div>
 
       <div className="space-y-4">
-        {Object.keys(users).length === 0 ? (
+        {users.length === 0 ? (
           <div className="text-center text-slate-400 py-8">
             <Users className="w-12 h-12 mx-auto mb-4 opacity-50" />
             <p>Nenhum usuário encontrado</p>
           </div>
         ) : (
-          Object.entries(users).map(([username, user]) => (
-            <div key={username} className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/30">
+          users.map((user) => (
+            <div key={user.username} className="p-4 bg-slate-800/50 rounded-lg border border-slate-600/30">
               <div className="flex items-center justify-between mb-4">
                 <h4 className="text-white font-semibold">
-                  {username}
-                  {username === 'administrador' && (
+                  {user.username}
+                  {user.username === 'administrador' && (
                     <span className="ml-2 text-xs bg-purple-500/20 text-purple-300 px-2 py-1 rounded">
                       Admin
                     </span>
                   )}
                 </h4>
                 <div className="flex space-x-2">
-                  <PasswordChange 
-                    username={username}
-                    isAdmin={isAdmin}
-                    onPasswordUpdate={handlePasswordUpdate}
-                  />
-                  {username !== 'administrador' && (
-                    <>
-                      <Button
-                        onClick={() => setEditingUser(editingUser === username ? null : username)}
-                        variant="outline"
-                        size="sm"
-                        className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button
-                        onClick={() => deleteUser(username)}
-                        variant="outline"
-                        size="sm"
-                        className="border-red-500/50 text-red-400 hover:bg-red-500/20"
-                      >
-                        <Trash className="w-4 h-4" />
-                      </Button>
-                    </>
+                  {user.username !== 'administrador' && (
+                    <Button
+                      onClick={() => deleteUser(user.username)}
+                      variant="outline"
+                      size="sm"
+                      className="border-red-500/50 text-red-400 hover:bg-red-500/20"
+                    >
+                      <Trash className="w-4 h-4" />
+                    </Button>
                   )}
                 </div>
               </div>
-
-              {editingUser === username && username !== 'administrador' && (
-                <div className="space-y-3 mb-4 p-3 bg-slate-700/30 rounded">
-                  <div className="space-y-2">
-                    <Label className="text-slate-300">Nova Senha</Label>
-                    <Input
-                      type="password"
-                      value={user.password}
-                      onChange={(e) => updatePassword(username, e.target.value)}
-                      className="bg-slate-700/50 border-slate-600 text-white"
-                    />
-                  </div>
-                </div>
-              )}
 
               <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                 {Object.entries(user.permissions).map(([permission, hasPermission]) => (
@@ -372,9 +363,9 @@ const UserManagement = () => {
                     <Switch
                       checked={hasPermission}
                       onCheckedChange={(checked) => 
-                        updatePermission(username, permission as keyof User['permissions'], checked)
+                        updatePermission(user.username, permission as keyof User['permissions'], checked)
                       }
-                      disabled={username === 'administrador'}
+                      disabled={user.username === 'administrador'}
                     />
                   </div>
                 ))}
@@ -383,11 +374,6 @@ const UserManagement = () => {
           ))
         )}
       </div>
-
-      <Button onClick={saveUsers} className="w-full bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-600 hover:to-cyan-600">
-        <Save className="w-4 h-4 mr-2" />
-        Salvar Alterações
-      </Button>
     </div>
   );
 };

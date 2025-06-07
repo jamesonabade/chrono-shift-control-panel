@@ -1,10 +1,11 @@
 
 const express = require('express');
 const db = require('../database');
+const upload = require('../utils/multer');
 
 const router = express.Router();
 
-// Personalizações
+// Configurações do sistema
 router.get('/customizations', async (req, res) => {
   try {
     const customizations = await db.getConfig('customizations');
@@ -12,51 +13,42 @@ router.get('/customizations', async (req, res) => {
       background: '',
       logo: '',
       favicon: '',
-      title: 'PAINEL DE CONTROLE',
-      subtitle: 'Sistema de Gerenciamento Docker'
+      title: process.env.SYSTEM_TITLE || 'PAINEL DE CONTROLE',
+      subtitle: process.env.SYSTEM_SUBTITLE || 'Sistema de Gerenciamento Docker'
     });
   } catch (error) {
-    console.error('❌ Erro ao buscar personalizações:', error);
-    res.status(500).json({ error: 'Erro ao carregar personalizações' });
+    console.error('❌ Erro ao buscar configurações:', error);
+    res.status(500).json({ error: 'Erro ao carregar configurações' });
   }
 });
 
-router.post('/customizations', async (req, res) => {
+router.post('/customizations', upload.fields([
+  { name: 'background', maxCount: 1 },
+  { name: 'logo', maxCount: 1 },
+  { name: 'favicon', maxCount: 1 }
+]), async (req, res) => {
   try {
-    const customizations = req.body;
+    const { title, subtitle } = req.body;
+    const files = req.files;
     
-    await db.setConfig('customizations', customizations);
-    await db.logAction('CUSTOMIZATIONS_UPDATED', customizations, req.headers['x-user'] || 'system');
+    // Buscar configuração atual
+    const currentConfig = await db.getConfig('customizations') || {};
     
-    res.json({ success: true });
+    const newConfig = {
+      background: files?.background ? `/uploads/${files.background[0].filename}` : currentConfig.background || '',
+      logo: files?.logo ? `/uploads/${files.logo[0].filename}` : currentConfig.logo || '',
+      favicon: files?.favicon ? `/uploads/${files.favicon[0].filename}` : currentConfig.favicon || '',
+      title: title || currentConfig.title || process.env.SYSTEM_TITLE || 'PAINEL DE CONTROLE',
+      subtitle: subtitle || currentConfig.subtitle || process.env.SYSTEM_SUBTITLE || 'Sistema de Gerenciamento Docker'
+    };
+    
+    await db.setConfig('customizations', newConfig);
+    await db.logAction('CUSTOMIZATIONS_UPDATED', newConfig, req.headers['x-user'] || 'system');
+    
+    res.json({ success: true, customizations: newConfig });
   } catch (error) {
-    console.error('❌ Erro ao salvar personalizações:', error);
-    res.status(500).json({ error: 'Erro ao salvar personalizações' });
-  }
-});
-
-// Variáveis do sistema
-router.get('/system-variables', async (req, res) => {
-  try {
-    const variables = await db.getConfig('systemVariables');
-    res.json(variables || {});
-  } catch (error) {
-    console.error('❌ Erro ao buscar variáveis:', error);
-    res.status(500).json({ error: 'Erro ao carregar variáveis' });
-  }
-});
-
-router.post('/system-variables', async (req, res) => {
-  try {
-    const variables = req.body;
-    
-    await db.setConfig('systemVariables', variables);
-    await db.logAction('SYSTEM_VARIABLES_UPDATED', variables, req.headers['x-user'] || 'system');
-    
-    res.json({ success: true });
-  } catch (error) {
-    console.error('❌ Erro ao salvar variáveis:', error);
-    res.status(500).json({ error: 'Erro ao salvar variáveis' });
+    console.error('❌ Erro ao salvar configurações:', error);
+    res.status(500).json({ error: 'Erro ao salvar configurações' });
   }
 });
 

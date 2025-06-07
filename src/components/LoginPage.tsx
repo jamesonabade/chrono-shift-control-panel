@@ -48,10 +48,20 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         // Atualizar título da página
         document.title = customizations.title || 'PAINEL DE CONTROLE';
       } else {
-        console.warn('❌ Servidor indisponível, usando configurações padrão');
+        console.warn('❌ Não foi possível carregar personalizações, usando configurações padrão');
+        // Usar configurações padrão
+        const envTitle = import.meta.env.VITE_SYSTEM_TITLE;
+        const envSubtitle = import.meta.env.VITE_SYSTEM_SUBTITLE;
+        if (envTitle) setTitle(envTitle);
+        if (envSubtitle) setSubtitle(envSubtitle);
       }
     } catch (error) {
       console.error('❌ Erro ao carregar personalizações:', error);
+      // Usar configurações padrão em caso de erro
+      const envTitle = import.meta.env.VITE_SYSTEM_TITLE || 'PAINEL DEV';
+      const envSubtitle = import.meta.env.VITE_SYSTEM_SUBTITLE || 'Sistema de Gerenciamento Docker';
+      setTitle(envTitle);
+      setSubtitle(envSubtitle);
     }
   };
 
@@ -77,7 +87,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
     
     try {
       const loginUrl = getApiEndpoint('/api/auth/login');
-      console.log('🔐 Tentando login:', loginUrl);
+      console.log('🔐 Tentando login no backend:', loginUrl);
+      console.log('🔐 Dados de login:', { username, password: '***' });
       
       const response = await fetch(loginUrl, {
         method: 'POST',
@@ -87,12 +98,20 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
         body: JSON.stringify({ username, password })
       });
 
+      console.log('🔐 Resposta do servidor:', response.status, response.statusText);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
+      console.log('🔐 Dados de resposta:', data);
 
-      if (response.ok && data.success) {
+      if (data.success) {
         // Salvar dados do usuário
         localStorage.setItem('currentUser', username);
         localStorage.setItem('userPermissions', JSON.stringify(data.permissions || {}));
+        localStorage.setItem('isAuthenticated', 'true');
         
         console.log('✅ Login realizado com sucesso');
         
@@ -114,7 +133,7 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
       console.error('❌ Erro de conexão:', error);
       toast({
         title: "Erro de conexão",
-        description: "Não foi possível conectar ao servidor",
+        description: `Não foi possível conectar ao servidor: ${error.message}`,
         variant: "destructive"
       });
     } finally {
@@ -225,8 +244,8 @@ const LoginPage = ({ onLogin }: LoginPageProps) => {
           
           <div className="text-center text-sm text-slate-400 mt-4">
             <p>Usuários padrão:</p>
-            <p><span className="text-cyan-400">administrador</span> / admin123</p>
-            <p><span className="text-green-400">usuario</span> / user123</p>
+            <p><span className="text-cyan-400">administrador</span> / {import.meta.env.VITE_ADMIN_PASSWORD || '123admin'}</p>
+            <p><span className="text-green-400">usuario</span> / {import.meta.env.VITE_USER_PASSWORD || '123user'}</p>
           </div>
         </CardContent>
       </Card>
