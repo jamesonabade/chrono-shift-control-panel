@@ -18,7 +18,7 @@ const Index = () => {
     return <LoginForm />;
   }
 
-  return <Dashboard onLogout={() => {}} />;
+  return <Dashboard />;
 };
 
 export default Index;

@@ -1,7 +1,25 @@
 
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+// Detectar automaticamente a URL da API baseado no ambiente
+const getApiUrl = () => {
+  if (typeof window === 'undefined') return 'http://localhost:3001';
+  
+  const hostname = window.location.hostname;
+  const protocol = window.location.protocol;
+  
+  // Se estiver acessando via localhost:8080 (desenvolvimento direto)
+  if (hostname === 'localhost' && window.location.port === '8080') {
+    return 'http://localhost:3001';
+  }
+  
+  // Se estiver acessando via nginx (porta 80 ou hostname diferente)
+  return `${protocol}//${hostname}`;
+};
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || getApiUrl();
+
+console.log('🔗 API URL configurada:', API_BASE_URL);
 
 export const api = axios.create({
   baseURL: `${API_BASE_URL}/api`,
@@ -18,9 +36,11 @@ api.interceptors.request.use(
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('📡 Fazendo requisição para:', config.baseURL + config.url);
     return config;
   },
   (error) => {
+    console.error('❌ Erro na requisição:', error);
     return Promise.reject(error);
   }
 );
@@ -28,14 +48,17 @@ api.interceptors.request.use(
 // Interceptor para tratamento de respostas
 api.interceptors.response.use(
   (response) => {
+    console.log('✅ Resposta recebida:', response.status, response.config.url);
     return response;
   },
   (error) => {
+    console.error('❌ Erro na resposta:', error.response?.status, error.config?.url, error.response?.data);
+    
     if (error.response?.status === 401) {
       // Token expirado ou inválido
       localStorage.removeItem('authToken');
       localStorage.removeItem('currentUser');
-      window.location.href = '/login';
+      window.location.href = '/';
     }
     return Promise.reject(error);
   }
