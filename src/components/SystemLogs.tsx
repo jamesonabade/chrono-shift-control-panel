@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -5,7 +6,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { FileText, Download, Eye, AlertCircle, CheckCircle, XCircle, Terminal, Server, MonitorSpeaker, ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react';
-import { getApiEndpoint } from '@/utils/apiEndpoints';
 
 interface LogEntry {
   timestamp: string;
@@ -44,10 +44,7 @@ const SystemLogs = () => {
   const loadBackendLogs = async () => {
     setIsLoading(true);
     try {
-      const backendLogsUrl = getApiEndpoint('/api/backend-logs');
-      console.log('🔄 Carregando logs do backend:', backendLogsUrl);
-      
-      const response = await fetch(backendLogsUrl);
+      const response = await fetch('http://localhost:3001/api/backend-logs');
       if (response.ok) {
         const data = await response.json();
         setBackendLogs(data || []);

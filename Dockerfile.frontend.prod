@@ -1,12 +1,10 @@
 
-FROM node:18-bookworm
+FROM node:20-bookworm
 
 # Configurar locale e timezone
 RUN apt-get update && apt-get install -y \
     locales \
     tzdata \
-    bash \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar locale para pt_BR.UTF-8
@@ -26,17 +24,23 @@ ENV TZ=America/Bahia
 
 WORKDIR /app
 
+# Instalar bash e curl
+RUN apt-get update && apt-get install -y bash curl && rm -rf /var/lib/apt/lists/*
+
 # Criar diretórios necessários
 RUN mkdir -p /app/scripts /app/logs /app/data
 
-# Copiar package files primeiro
+# Copiar package files
 COPY package*.json ./
 
-# Instalar dependências incluindo devDependencies para build
-RUN npm install
+# Instalar dependências
+RUN npm ci --only=production
 
 # Copiar código fonte
 COPY . .
+
+# Copiar arquivo de ambiente de produção se existir
+COPY .env.production* ./
 
 # Build da aplicação
 RUN npm run build
@@ -53,5 +57,5 @@ RUN chmod -R 755 /app/data 2>/dev/null || true
 # Expor porta
 EXPOSE 8080
 
-# Comando para produção
+# Comando para iniciar (servir arquivos estáticos)
 CMD ["serve", "-s", "dist", "-l", "8080"]

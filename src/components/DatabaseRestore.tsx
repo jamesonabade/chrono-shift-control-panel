@@ -4,19 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Database } from 'lucide-react';
-import { getApiEndpoint } from '@/utils/apiEndpoints';
+import { Database, Play } from 'lucide-react';
 
 const DatabaseRestore = () => {
   const [environment, setEnvironment] = useState('');
   const [isExecuting, setIsExecuting] = useState(false);
   const { toast } = useToast();
-
-  // Carregar último estado salvo
-  useEffect(() => {
-    const savedEnvironment = localStorage.getItem('lastSelectedEnvironment');
-    if (savedEnvironment) setEnvironment(savedEnvironment);
-  }, []);
 
   const executeCommand = async () => {
     if (!environment) {
@@ -47,24 +40,20 @@ const DatabaseRestore = () => {
         return;
       }
 
-      // Carregar variáveis fixas do sistema (incluindo variáveis gerais)
+      // Carregar variáveis fixas do sistema
       const systemVars = JSON.parse(localStorage.getItem('systemVariables') || '{}');
       console.log('Variáveis do sistema:', systemVars);
       
       const envVariables = {
-        DB_RESTORE: environment,
-        DB_SYSTEM: environment,
-        ...(systemVars.database || {}),
-        ...(systemVars.general || {}) // Incluir variáveis gerais
+        ENVIRONMENT: environment,
+        ENV: environment,
+        ...(systemVars.database || {})
       };
 
       console.log('Variáveis de ambiente para execução:', envVariables);
 
-      // Executar todos os comandos vinculados usando o novo utilitário de endpoints
+      // Executar todos os comandos vinculados
       let allSuccess = true;
-      const executeUrl = getApiEndpoint('/api/execute-command');
-      console.log('🚀 URL de execução:', executeUrl);
-      
       for (const commandId of databaseCommands) {
         const allCommands = JSON.parse(localStorage.getItem('customCommands') || '[]');
         const command = allCommands.find((cmd: any) => cmd.id === commandId);
@@ -72,7 +61,7 @@ const DatabaseRestore = () => {
         if (command) {
           console.log('Executando comando:', command);
           
-          const response = await fetch(executeUrl, {
+          const response = await fetch('http://localhost:3001/api/execute-command', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -102,9 +91,6 @@ const DatabaseRestore = () => {
       }
 
       if (allSuccess) {
-        // Salvar último estado aplicado
-        localStorage.setItem('lastSelectedEnvironment', environment);
-        
         toast({
           title: "Banco restaurado!",
           description: `Restauração concluída no ambiente ${environment}`,
@@ -183,7 +169,7 @@ const DatabaseRestore = () => {
       )}
 
       <div className="p-3 bg-slate-700/20 rounded text-xs text-slate-400">
-        <p><strong>Variáveis disponíveis:</strong> $DB_RESTORE, $DB_SYSTEM + variáveis personalizadas</p>
+        <p><strong>Variáveis disponíveis:</strong> $ENVIRONMENT, $ENV + variáveis personalizadas</p>
       </div>
     </div>
   );

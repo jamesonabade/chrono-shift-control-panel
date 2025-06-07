@@ -1,9 +1,9 @@
+
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
-import { X, Download, Upload, RefreshCw } from 'lucide-react';
-import { getApiEndpoint } from '@/utils/apiEndpoints';
+import { X, Download, Upload } from 'lucide-react';
 
 interface CustomizeLoginProps {
   show: boolean;
@@ -16,7 +16,6 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
   const [favicon, setFavicon] = useState('');
   const [title, setTitle] = useState('PAINEL DE CONTROLE');
   const [subtitle, setSubtitle] = useState('Sistema de Gerenciamento Docker');
-  const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -26,36 +25,54 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
   }, [show]);
 
   const loadCustomizations = async () => {
-    setLoading(true);
     try {
-      const customizationsUrl = getApiEndpoint('/api/customizations');
-      console.log('🔄 Carregando personalizações:', customizationsUrl);
-      
-      const response = await fetch(customizationsUrl, {
-        headers: {
-          'X-User': localStorage.getItem('currentUser') || 'unknown'
-        }
-      });
-      
+      const response = await fetch('http://localhost:3001/api/customizations');
       if (response.ok) {
         const customizations = await response.json();
-        console.log('✅ Personalizações carregadas:', customizations);
-        
         setBackgroundImage(customizations.background || '');
         setLogo(customizations.logo || '');
         setFavicon(customizations.favicon || '');
         setTitle(customizations.title || 'PAINEL DE CONTROLE');
         setSubtitle(customizations.subtitle || 'Sistema de Gerenciamento Docker');
         
-        // Aplicar personalizações imediatamente
+        // Aplicar customizações imediatamente
         applyCustomizations(customizations);
       } else {
-        console.warn('❌ Erro ao carregar personalizações do servidor');
+        // Fallback para localStorage
+        const localCustomizations = {
+          background: localStorage.getItem('loginBackground') || '',
+          logo: localStorage.getItem('loginLogo') || '',
+          favicon: localStorage.getItem('loginFavicon') || '',
+          title: localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE',
+          subtitle: localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker'
+        };
+        
+        setBackgroundImage(localCustomizations.background);
+        setLogo(localCustomizations.logo);
+        setFavicon(localCustomizations.favicon);
+        setTitle(localCustomizations.title);
+        setSubtitle(localCustomizations.subtitle);
+        
+        applyCustomizations(localCustomizations);
       }
     } catch (error) {
-      console.error('❌ Erro de conexão:', error);
-    } finally {
-      setLoading(false);
+      console.error('Erro ao carregar personalizações:', error);
+      // Fallback para localStorage
+      const localCustomizations = {
+        background: localStorage.getItem('loginBackground') || '',
+        logo: localStorage.getItem('loginLogo') || '',
+        favicon: localStorage.getItem('loginFavicon') || '',
+        title: localStorage.getItem('loginTitle') || 'PAINEL DE CONTROLE',
+        subtitle: localStorage.getItem('loginSubtitle') || 'Sistema de Gerenciamento Docker'
+      };
+      
+      setBackgroundImage(localCustomizations.background);
+      setLogo(localCustomizations.logo);
+      setFavicon(localCustomizations.favicon);
+      setTitle(localCustomizations.title);
+      setSubtitle(localCustomizations.subtitle);
+      
+      applyCustomizations(localCustomizations);
     }
   };
 
@@ -80,46 +97,54 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
   };
 
   const saveCustomizations = async (data: any) => {
-    setLoading(true);
     try {
-      const customizationsUrl = getApiEndpoint('/api/customizations');
-      console.log('💾 Salvando personalizações no servidor:', customizationsUrl);
-      
-      const response = await fetch(customizationsUrl, {
+      const response = await fetch('http://localhost:3001/api/customizations', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-User': localStorage.getItem('currentUser') || 'unknown'
         },
         body: JSON.stringify(data)
       });
 
-      if (response.ok) {
-        console.log('✅ Personalizações salvas no servidor');
-        
-        // Aplicar personalizações imediatamente
-        applyCustomizations(data);
-
-        toast({
-          title: "Personalização salva!",
-          description: "Alterações aplicadas globalmente",
-        });
-      } else {
+      if (!response.ok) {
         throw new Error('Falha ao salvar no servidor');
       }
+
+      // Aplicar personalizações imediatamente
+      applyCustomizations(data);
+
+      // Também salvar localmente como backup
+      Object.entries(data).forEach(([key, value]) => {
+        if (value) {
+          localStorage.setItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`, value as string);
+        } else {
+          localStorage.removeItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`);
+        }
+      });
+
+      toast({
+        title: "Personalização salva!",
+        description: "Alterações aplicadas globalmente",
+      });
     } catch (error) {
-      console.error('❌ Erro ao salvar personalizações:', error);
-      
+      console.error('Erro ao salvar personalizações:', error);
+      // Fallback para localStorage
+      Object.entries(data).forEach(([key, value]) => {
+        if (value) {
+          localStorage.setItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`, value as string);
+        } else {
+          localStorage.removeItem(`login${key.charAt(0).toUpperCase() + key.slice(1)}`);
+        }
+      });
+
       // Aplicar personalizações mesmo se o servidor falhar
       applyCustomizations(data);
 
       toast({
-        title: "Aplicado localmente",
-        description: "Servidor indisponível, configurações aplicadas apenas nesta sessão",
+        title: "Salvo localmente",
+        description: "Servidor indisponível, salvo apenas neste navegador",
         variant: "destructive"
       });
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -250,16 +275,6 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
       <div className="flex justify-between items-center">
         <h3 className="text-white font-semibold">Personalização Global</h3>
         <div className="flex gap-2">
-          <Button
-            onClick={loadCustomizations}
-            variant="outline"
-            size="sm"
-            disabled={loading}
-            className="border-blue-500/50 text-blue-400 hover:bg-blue-500/20"
-            title="Recarregar configurações"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          </Button>
           <Button
             onClick={downloadConfig}
             variant="outline"
@@ -411,7 +426,6 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
           value={title}
           onChange={(e) => handleTitleChange(e.target.value)}
           placeholder="PAINEL DE CONTROLE"
-          disabled={loading}
           className="bg-slate-700/50 border-slate-600 text-white"
         />
         <p className="text-xs text-slate-500">Atual: {title}</p>
@@ -424,17 +438,10 @@ const CustomizeLogin = ({ show, onClose }: CustomizeLoginProps) => {
           value={subtitle}
           onChange={(e) => handleSubtitleChange(e.target.value)}
           placeholder="Sistema de Gerenciamento Docker"
-          disabled={loading}
           className="bg-slate-700/50 border-slate-600 text-white"
         />
         <p className="text-xs text-slate-500">Atual: {subtitle}</p>
       </div>
-
-      {loading && (
-        <div className="text-center text-sm text-slate-400">
-          Salvando configurações...
-        </div>
-      )}
     </div>
   );
 };

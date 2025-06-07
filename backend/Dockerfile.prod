@@ -30,11 +30,6 @@ ENV LANG=pt_BR.UTF-8
 ENV LC_ALL=pt_BR.UTF-8
 ENV TZ=America/Bahia
 ENV NODE_ENV=production
-ENV PORT=3001
-ENV DATA_DIR=/app/data
-ENV SCRIPTS_DIR=/app/scripts
-ENV LOGS_DIR=/app/logs
-ENV UPLOADS_DIR=/app/uploads
 
 # Executar como root
 USER root
@@ -42,29 +37,22 @@ USER root
 WORKDIR /app
 
 # Criar diretórios necessários
-RUN mkdir -p /app/data /app/scripts /app/logs /app/uploads
+RUN mkdir -p /app/scripts /app/logs /app/data
 
 # Copiar arquivos do backend
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm ci --only=production
 
-# Copiar código fonte e script de inicialização
+# Copiar código fonte
 COPY . .
-COPY init.sh /app/init.sh
 
-# Dar permissões
-RUN chmod +x /app/init.sh
+# Dar permissões completas
 RUN chmod -R 755 /app/scripts 2>/dev/null || true
 RUN chmod -R 755 /app/logs 2>/dev/null || true
 RUN chmod -R 755 /app/data 2>/dev/null || true
-RUN chmod -R 755 /app/uploads 2>/dev/null || true
 
 # Expor porta
 EXPOSE 3001
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3001/api/health || exit 1
-
 # Comando de entrada
-CMD ["/app/init.sh"]
+CMD ["npm", "start"]
