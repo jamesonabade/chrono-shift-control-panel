@@ -1,0 +1,124 @@
+
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String   @unique
+  password    String
+  name        String
+  role        Role     @default(USER)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastLoginAt DateTime?
+  
+  // Relacionamentos
+  sessions    Session[]
+  logs        SystemLog[]
+  
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  isActive  Boolean  @default(true)
+  
+  // Relacionamentos
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("sessions")
+}
+
+model Permission {
+  id          String @id @default(cuid())
+  name        String @unique
+  description String?
+  category    String
+  
+  // Relacionamentos
+  rolePermissions RolePermission[]
+  
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String @id @default(cuid())
+  roleId       String
+  permissionId String
+  
+  // Relacionamentos
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model SystemConfig {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  category    String
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("system_configs")
+}
+
+model SystemLog {
+  id        String   @id @default(cuid())
+  level     LogLevel
+  action    String
+  message   String
+  details   Json?
+  userId    String?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  
+  // Relacionamentos
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  @@map("system_logs")
+}
+
+model FileUpload {
+  id           String   @id @default(cuid())
+  originalName String
+  filename     String   @unique
+  mimetype     String
+  size         Int
+  path         String
+  category     String?
+  uploadedBy   String?
+  createdAt    DateTime @default(now())
+  
+  @@map("file_uploads")
+}
+
+enum Role {
+  ADMIN
+  USER
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+  DEBUG
+}

@@ -2,77 +2,91 @@
 version: '3.8'
 
 services:
-  nginx:
-    image: nginx:alpine
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx-dev.conf:/etc/nginx/nginx.conf:ro
-    depends_on:
-      - frontend
-      - backend
+  # Banco de dados PostgreSQL
+  postgres:
+    image: postgres:15-alpine
+    container_name: dashboard-postgres
     restart: unless-stopped
-    networks:
-      - app-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  frontend:
-    build: .
-    expose:
-      - "8080"
     environment:
-      - NODE_ENV=development
-      - VITE_APP_ENV=docker
-      - VITE_API_URL=http://backend:3001
-      - VITE_BASE_PATH=/
+      POSTGRES_DB: dashboard_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - dashboard-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Backend Node.js
+  backend:
+    build: ./backend
+    container_name: dashboard-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/dashboard_db?schema=public
+      JWT_SECRET: your-super-secret-jwt-key-change-in-production
+      JWT_EXPIRES_IN: 24h
+      PORT: 3001
+      FRONTEND_URL: http://localhost:5173
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/uploads:/app/uploads
+      - ./backend/src:/app/src
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - dashboard-network
+    command: sh -c "npx prisma migrate deploy && npm run db:seed && npm run dev"
+
+  # Frontend React
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: dashboard-frontend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: development
+      VITE_API_URL: http://localhost:3001
     volumes:
       - ./src:/app/src
       - ./public:/app/public
-      - scripts_data:/app/scripts
-      - logs_data:/app/logs
-    command: npm run dev -- --host 0.0.0.0 --port 8080
-    restart: unless-stopped
+    ports:
+      - "5173:5173"
     depends_on:
       - backend
     networks:
-      - app-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
+      - dashboard-network
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    expose:
-      - "3001"
-    volumes:
-      - scripts_data:/app/scripts
-      - logs_data:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - NODE_ENV=development
+  # Proxy reverso Nginx
+  nginx:
+    image: nginx:alpine
+    container_name: dashboard-nginx
     restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - frontend
+      - backend
     networks:
-      - app-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-    privileged: true
-    user: root
+      - dashboard-network
 
 volumes:
-  scripts_data:
-  logs_data:
+  postgres_data:
+    driver: local
 
 networks:
-  app-network:
+  dashboard-network:
     driver: bridge

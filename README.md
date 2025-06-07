@@ -1,73 +1,222 @@
-# Welcome to your Lovable project
 
-## Project info
+# Dashboard Sistema
 
-**URL**: https://lovable.dev/projects/6d8ebb23-041a-4724-a9ae-543e4cca2f91
+Sistema de dashboard completo com autenticação JWT, gerenciamento de usuários, configurações e logs. Desenvolvido com React + TypeScript no frontend e Node.js + Express + Prisma no backend.
 
-## How can I edit this code?
+## 🚀 Tecnologias
 
-There are several ways of editing your application.
+### Frontend
+- **React 18** com TypeScript
+- **Vite** como bundler
+- **Tailwind CSS** para estilização
+- **Shadcn/UI** para componentes
+- **Axios** para requisições HTTP
+- **React Router** para roteamento
 
-**Use Lovable**
+### Backend
+- **Node.js** com Express
+- **Prisma** como ORM
+- **PostgreSQL** como banco de dados
+- **JWT** para autenticação
+- **bcrypt** para criptografia de senhas
+- **Winston** para logs
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/6d8ebb23-041a-4724-a9ae-543e4cca2f91) and start prompting.
+### Infraestrutura
+- **Docker** e **Docker Compose**
+- **Nginx** como proxy reverso
+- Volumes persistentes para dados
 
-Changes made via Lovable will be committed automatically to this repo.
+## 📋 Pré-requisitos
 
-**Use your preferred IDE**
+- Docker e Docker Compose instalados
+- Node.js 18+ (para desenvolvimento local)
+- Git
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+## 🔧 Instalação e Execução
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### 1. Clone o repositório
+```bash
+git clone <url-do-repositorio>
+cd dashboard-sistema
+```
 
-Follow these steps:
+### 2. Configuração do ambiente
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Copie o arquivo `.env` no backend e ajuste as variáveis conforme necessário:
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+```bash
+cp backend/.env.example backend/.env
+```
 
-# Step 3: Install the necessary dependencies.
-npm i
+### 3. Iniciar com Docker Compose
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+# Construir e iniciar todos os serviços
+docker-compose up --build
+
+# Ou em background
+docker-compose up -d --build
+```
+
+### 4. Acessar o sistema
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:3001
+- **Nginx (proxy)**: http://localhost:80
+
+## 👤 Credenciais Padrão
+
+### Administrador
+- **E-mail**: admin@dashboard.com
+- **Senha**: admin123
+
+### Usuário Comum
+- **E-mail**: user@dashboard.com
+- **Senha**: user123
+
+## 🗄️ Estrutura do Banco de Dados
+
+O sistema cria automaticamente as seguintes tabelas:
+
+- **users**: Usuários do sistema
+- **sessions**: Sessões ativas
+- **permissions**: Permissões disponíveis
+- **role_permissions**: Relacionamento entre roles e permissões
+- **system_configs**: Configurações do sistema
+- **system_logs**: Logs de auditoria
+- **file_uploads**: Controle de arquivos enviados
+
+## 📁 Estrutura do Projeto
+
+```
+├── backend/                    # Backend Node.js
+│   ├── src/
+│   │   ├── config/            # Configurações (DB, logs)
+│   │   ├── controllers/       # Controladores
+│   │   ├── middleware/        # Middlewares
+│   │   ├── routes/           # Rotas da API
+│   │   ├── scripts/          # Scripts de seed
+│   │   └── server.js         # Entrada principal
+│   ├── prisma/
+│   │   └── schema.prisma     # Schema do banco
+│   └── Dockerfile
+├── src/                       # Frontend React
+│   ├── components/           # Componentes React
+│   ├── hooks/               # Custom hooks
+│   ├── lib/                 # Utilitários
+│   └── App.tsx
+├── nginx/
+│   └── nginx.conf           # Configuração do proxy
+├── docker-compose.yml       # Orquestração Docker
+└── README.md
+```
+
+## 🔐 Sistema de Autenticação
+
+- **JWT tokens** com expiração configurável
+- **Senhas criptografadas** com bcrypt
+- **Sessões ativas** rastreadas no banco
+- **Middleware de autenticação** em todas as rotas protegidas
+- **Controle de acesso** baseado em roles (ADMIN/USER)
+
+## 📊 Funcionalidades
+
+### Implementadas
+- ✅ Sistema de login/logout
+- ✅ Dashboard com estatísticas
+- ✅ Autenticação JWT
+- ✅ Controle de acesso por roles
+- ✅ Logs de auditoria
+- ✅ Configurações persistentes
+- ✅ Interface responsiva
+
+### Em Desenvolvimento
+- 🔄 Gerenciamento completo de usuários
+- 🔄 Interface de configurações
+- 🔄 Visualização de logs
+- 🔄 Métricas e relatórios
+- 🔄 Upload de arquivos
+
+## 🔧 Comandos Úteis
+
+### Backend
+```bash
+# Instalar dependências
+cd backend && npm install
+
+# Executar migrações
+npm run db:migrate
+
+# Executar seed
+npm run db:seed
+
+# Resetar banco
+npm run db:reset
+
+# Desenvolvimento
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Frontend
+```bash
+# Instalar dependências
+npm install
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+# Desenvolvimento
+npm run dev
 
-**Use GitHub Codespaces**
+# Build para produção
+npm run build
+```
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### Docker
+```bash
+# Ver logs
+docker-compose logs -f
 
-## What technologies are used for this project?
+# Parar serviços
+docker-compose down
 
-This project is built with:
+# Rebuild
+docker-compose up --build
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+# Executar comando no container
+docker-compose exec backend npm run db:seed
+```
 
-## How can I deploy this project?
+## 🌐 Ambiente de Produção
 
-Simply open [Lovable](https://lovable.dev/projects/6d8ebb23-041a-4724-a9ae-543e4cca2f91) and click on Share -> Publish.
+Para produção, ajuste:
 
-## Can I connect a custom domain to my Lovable project?
+1. **Variáveis de ambiente** no `.env`
+2. **Secrets JWT** seguros
+3. **Configuração HTTPS** no Nginx
+4. **Backup automático** do banco
+5. **Monitoramento** e alertas
 
-Yes, you can!
+## 📝 Logs
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Os logs são armazenados:
+- **Console**: Durante desenvolvimento
+- **Arquivos**: `backend/logs/` (rotação diária)
+- **Banco de dados**: Tabela `system_logs`
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/tips-tricks/custom-domain#step-by-step-guide)
+## 🤝 Contribuição
+
+1. Fork o projeto
+2. Crie uma branch (`git checkout -b feature/nova-funcionalidade`)
+3. Commit suas mudanças (`git commit -am 'Adiciona nova funcionalidade'`)
+4. Push para a branch (`git push origin feature/nova-funcionalidade`)
+5. Abra um Pull Request
+
+## 📄 Licença
+
+Este projeto está sob licença MIT. Veja o arquivo [LICENSE](LICENSE) para mais detalhes.
+
+## 🆘 Suporte
+
+Para suporte, abra uma issue no repositório ou entre em contato através do e-mail de suporte.
+
+---
+
+**Nota**: Este é um ambiente de desenvolvimento que reproduz fielmente o comportamento de produção. Todas as configurações e estruturas foram pensadas para facilitar a manutenção e escalabilidade do sistema.

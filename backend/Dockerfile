@@ -1,59 +1,38 @@
 
-FROM docker:25 AS docker-cli
+FROM node:18-alpine
 
-FROM node:18-bookworm
+# Instalar dependências do sistema
+RUN apk add --no-cache openssl
 
-# Copiar Docker CLI do estágio anterior
-COPY --from=docker-cli /usr/local/bin/docker /usr/local/bin/docker
-
-# Configurar locale e timezone
-RUN apt-get update && apt-get install -y \
-    locales \
-    tzdata \
-    bash \
-    curl \
-    sudo \
-    tini \
-    && rm -rf /var/lib/apt/lists/*
-
-# Configurar locale para pt_BR.UTF-8
-RUN sed -i '/^#.* pt_BR.UTF-8 /s/^#//' /etc/locale.gen && \
-    locale-gen && \
-    echo "LANG=pt_BR.UTF-8" > /etc/default/locale
-
-# Configurar timezone para America/Bahia
-RUN ln -fs /usr/share/zoneinfo/America/Bahia /etc/localtime && \
-    echo "America/Bahia" > /etc/timezone && \
-    dpkg-reconfigure -f noninteractive tzdata
-
-# Definir variáveis de ambiente
-ENV LANG=pt_BR.UTF-8
-ENV LC_ALL=pt_BR.UTF-8
-ENV TZ=America/Bahia
-ENV NODE_ENV=development
-
-# Executar como root
-USER root
-
+# Configurar diretório de trabalho
 WORKDIR /app
 
-# Criar diretórios necessários
-RUN mkdir -p /app/scripts /app/logs /app/data
-
-# Copiar arquivos do backend
+# Copiar arquivos de dependências
 COPY package*.json ./
-RUN npm install
+COPY prisma ./prisma/
+
+# Instalar dependências
+RUN npm ci --only=production
+
+# Gerar cliente Prisma
+RUN npx prisma generate
 
 # Copiar código fonte
-COPY . .
+COPY src ./src
 
-# Dar permissões completas
-RUN chmod -R 755 /app/scripts 2>/dev/null || true
-RUN chmod -R 755 /app/logs 2>/dev/null || true
-RUN chmod -R 755 /app/data 2>/dev/null || true
+# Criar diretórios necessários
+RUN mkdir -p logs uploads temp
+
+# Criar usuário não-root
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S backend -u 1001
+
+# Dar permissões ao usuário
+RUN chown -R backend:nodejs /app
+USER backend
 
 # Expor porta
 EXPOSE 3001
 
-# Comando de entrada
-CMD ["tini", "--", "npm", "start"]
+# Comando de inicialização
+CMD ["npm", "start"]
