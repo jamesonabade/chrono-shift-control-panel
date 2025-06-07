@@ -1,136 +1,107 @@
 
-# Deploy de Produção - Sistema de Gerenciamento
+# Deploy de Produção - Sistema Independente
 
-Este documento explica como realizar o deploy do sistema em produção usando Docker e Portainer.
+Este documento explica como realizar o deploy do sistema em produção usando **APENAS Portainer**, sem necessidade de arquivos locais no servidor.
 
 ## 🎯 Características do Sistema de Produção
 
-### ✅ Configurações Centralizadas
-- Todas as configurações são armazenadas no backend
-- Configurações persistem entre reinicializações
-- Acessível de qualquer computador/dispositivo
-- Não depende de localStorage do navegador
+### ✅ **Totalmente Independente**
+- **Sem dependência de arquivos locais** no servidor
+- Deploy completo via Portainer Stack
+- Volumes gerenciados automaticamente pelo Docker
+- Configuração via variáveis de ambiente
 
-### ✅ Autenticação Segura
-- Senhas configuráveis via variáveis de ambiente
-- Sistema de permissões persistente
-- Logs de acesso centralizados
-
-### ✅ Dados Persistentes
-- Scripts, logs e configurações em volumes nomeados
-- Backup automático de configurações
-- Não perde dados ao reiniciar containers
-
-### ✅ Auto-configuração
-- Detecta automaticamente o ambiente
-- Configura endpoints baseado no contexto
+### ✅ **Auto-configuração Completa**
+- Detecta automaticamente o ambiente de execução
+- Configura endpoints baseado nas variáveis
 - Suporte completo a subpaths (ex: `/scripts`)
+- Persistência de dados garantida
 
-## 🐳 Deploy com Docker Compose
+### ✅ **Autenticação Centralizada**
+- Sistema de usuários no backend
+- Configurações globais acessíveis de qualquer dispositivo
+- Senhas configuráveis via variáveis de ambiente
+- JWT para segurança das sessões
 
-### 1. Preparar Ambiente
+## 🚀 Deploy Rápido com Portainer
 
-```bash
-# Clonar/baixar código fonte
-git clone <seu-repositorio>
-cd sistema-gerenciamento
+### Passo 1: Criar Stack no Portainer
 
-# Criar diretórios para volumes
-mkdir -p data scripts logs uploads ssl
+1. **Acesse Portainer** → Stacks → Add stack
+2. **Nome**: `sistema-producao` (ou qualquer nome)
+3. **Cole o conteúdo** do `docker-compose.prod.yml`
 
-# Definir permissões
-chmod 755 data scripts logs uploads
-```
-
-### 2. Configurar Variáveis de Ambiente
-
-Crie o arquivo `.env` baseado no `.env.example`:
-
-```bash
-cp .env.example .env
-nano .env
-```
-
-**Configuração mínima para produção:**
-
-```env
-# Domínio e contexto
-DOMAIN=lab.sigdev.uesb.br
-BASE_PATH=/scripts
-
-# URLs da aplicação
-VITE_API_URL=https://lab.sigdev.uesb.br/scripts/api
-VITE_BASE_PATH=/scripts
-VITE_PUBLIC_URL=https://lab.sigdev.uesb.br/scripts
-
-# Senhas seguras (ALTERE ESTAS!)
-ADMIN_PASSWORD=sua-senha-admin-muito-segura
-USER_PASSWORD=sua-senha-user-segura
-
-# Chave JWT (gere uma aleatória)
-JWT_SECRET=chave-jwt-super-secreta-aleatoria
-
-# Caminhos dos volumes no host
-DATA_PATH=/opt/sistema-gerenciamento/data
-SCRIPTS_PATH=/opt/sistema-gerenciamento/scripts
-LOGS_PATH=/opt/sistema-gerenciamento/logs
-UPLOADS_PATH=/opt/sistema-gerenciamento/uploads
-```
-
-### 3. Executar Deploy
-
-```bash
-# Build e iniciar containers
-docker-compose -f docker-compose.prod.yml up -d --build
-
-# Verificar status
-docker-compose -f docker-compose.prod.yml ps
-
-# Ver logs
-docker-compose -f docker-compose.prod.yml logs -f
-```
-
-## 🌐 Deploy com Portainer Stack
-
-### 1. Criar Stack no Portainer
-
-1. Acesse Portainer > Stacks > Add stack
-2. Nome: `sistema-gerenciamento`
-3. Cole o conteúdo do `docker-compose.prod.yml`
-
-### 2. Configurar Variáveis de Ambiente
+### Passo 2: Configurar Variáveis de Ambiente
 
 Na seção "Environment variables" do Portainer, adicione:
 
-```
+```env
+# === CONFIGURAÇÃO BÁSICA ===
+STACK_NAME=sistema-producao
+NODE_ENV=production
+
+# === DOMÍNIO E CONTEXTO ===
 DOMAIN=seu-dominio.com
 BASE_PATH=/scripts
-VITE_API_URL=https://seu-dominio.com/scripts/api
+
+# === ENDPOINTS (auto-configurados) ===
+VITE_API_URL=/scripts/api
 VITE_BASE_PATH=/scripts
 VITE_PUBLIC_URL=https://seu-dominio.com/scripts
-ADMIN_PASSWORD=sua-senha-admin-segura
+
+# === SEGURANÇA (ALTERE!) ===
+ADMIN_PASSWORD=sua-senha-admin-muito-segura
 USER_PASSWORD=sua-senha-user-segura
-JWT_SECRET=sua-chave-jwt-super-secreta
-DATA_PATH=/opt/sistema/data
-SCRIPTS_PATH=/opt/sistema/scripts
-LOGS_PATH=/opt/sistema/logs
-UPLOADS_PATH=/opt/sistema/uploads
+JWT_SECRET=chave-jwt-super-secreta-aleatoria
+
+# === PERSONALIZAÇÃO ===
+SYSTEM_TITLE=PAINEL DE CONTROLE
+SYSTEM_SUBTITLE=Sistema de Gerenciamento Docker
 ```
 
-### 3. Deploy Stack
+### Passo 3: Deploy
 
-1. Clique em "Deploy the stack"
-2. Aguarde o build das imagens
-3. Verifique os logs dos containers
+1. **Clique em "Deploy the stack"**
+2. **Aguarde** o build das imagens (pode demorar alguns minutos)
+3. **Acesse** o sistema via URL configurada
 
-## ⚙️ Configuração do Nginx
+## 📋 Configurações por Ambiente
 
-### Para Subpath (ex: `/scripts`)
+### Para Domínio Principal
+```env
+DOMAIN=sistema.empresa.com
+BASE_PATH=
+VITE_API_URL=/api
+VITE_BASE_PATH=/
+VITE_PUBLIC_URL=https://sistema.empresa.com
+```
 
-Configurar proxy reverso no nginx principal:
+### Para Subpath
+```env
+DOMAIN=empresa.com
+BASE_PATH=/sistema
+VITE_API_URL=/sistema/api
+VITE_BASE_PATH=/sistema
+VITE_PUBLIC_URL=https://empresa.com/sistema
+```
+
+### Para Desenvolvimento
+```env
+DOMAIN=localhost
+BASE_PATH=
+VITE_API_URL=http://localhost/api
+VITE_BASE_PATH=/
+VITE_PUBLIC_URL=http://localhost
+```
+
+## 🔧 Configuração do Nginx Principal
+
+### Para Subpath (Recomendado)
+
+Configure seu nginx principal para redirecionar para o container:
 
 ```nginx
-# /etc/nginx/sites-available/seu-site
+# Em /etc/nginx/sites-available/seu-site
 location /scripts/ {
     proxy_pass http://localhost/;
     proxy_set_header Host $host;
@@ -138,7 +109,7 @@ location /scripts/ {
     proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
     proxy_set_header X-Forwarded-Proto $scheme;
     
-    # Remover /scripts do path antes de enviar para o container
+    # Remove /scripts do path
     rewrite ^/scripts/(.*)$ /$1 break;
 }
 
@@ -151,103 +122,144 @@ location /scripts/api/ {
 }
 ```
 
-### Para Domínio Dedicado
+## 💾 Gerenciamento de Dados
 
-```nginx
-server {
-    listen 80;
-    server_name sistema.seu-dominio.com;
-    
-    location / {
-        proxy_pass http://localhost/;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+### Volumes Automáticos
 
-## 🔧 Manutenção e Monitoramento
+O sistema cria automaticamente volumes nomeados:
+- `sistema_data_[stack-name]` - Configurações e dados
+- `sistema_scripts_[stack-name]` - Scripts salvos
+- `sistema_logs_[stack-name]` - Logs do sistema
+- `sistema_uploads_[stack-name]` - Arquivos enviados
 
-### Backup de Dados
+### Backup dos Dados
 
 ```bash
-# Backup manual
-tar -czf backup-$(date +%Y%m%d).tar.gz data/ scripts/ logs/
+# Listar volumes
+docker volume ls | grep sistema
 
-# Backup automático (crontab)
-0 2 * * * cd /opt/sistema && tar -czf /backups/backup-$(date +\%Y\%m\%d).tar.gz data/ scripts/ logs/
+# Backup de um volume específico
+docker run --rm \
+  -v sistema_data_sistema-producao:/data \
+  -v $(pwd):/backup \
+  alpine tar czf /backup/backup-data-$(date +%Y%m%d).tar.gz -C /data .
+
+# Backup de todos os volumes
+for vol in $(docker volume ls -q | grep sistema); do
+  docker run --rm \
+    -v $vol:/data \
+    -v $(pwd):/backup \
+    alpine tar czf /backup/backup-$vol-$(date +%Y%m%d).tar.gz -C /data .
+done
+```
+
+### Restaurar Backup
+
+```bash
+# Restaurar volume específico
+docker run --rm \
+  -v sistema_data_sistema-producao:/data \
+  -v $(pwd):/backup \
+  alpine sh -c "cd /data && tar xzf /backup/backup-data-20241201.tar.gz"
+```
+
+## 🔍 Monitoramento
+
+### Verificar Status
+
+```bash
+# Status dos containers
+docker ps | grep sistema
+
+# Logs em tempo real
+docker logs -f sistema-producao_backend_1
+
+# Health check
+curl https://seu-dominio.com/scripts/api/health
 ```
 
 ### Logs do Sistema
 
-```bash
-# Ver logs em tempo real
-docker-compose -f docker-compose.prod.yml logs -f backend
+Os logs ficam disponíveis em:
+- **Container logs**: `docker logs [container]`
+- **Volume logs**: No volume `sistema_logs_[stack-name]`
+- **Sistema**: Acessível via interface web
 
-# Ver logs específicos
-docker-compose -f docker-compose.prod.yml logs nginx
-docker-compose -f docker-compose.prod.yml logs frontend
+## 🔄 Atualizações
+
+### Atualizar Sistema
+
+1. **No Portainer** → Stacks → seu-stack → Editor
+2. **Modifique** as versões das imagens se necessário
+3. **Clique** em "Update the stack"
+4. **Aguarde** a atualização dos containers
+
+### Força Rebuild
+
+Se precisar forçar rebuild completo:
+1. **Stop** o stack
+2. **Remove** o stack (os volumes permanecem)
+3. **Recrie** o stack com as mesmas configurações
+
+## 🛡️ Segurança
+
+### Práticas Recomendadas
+
+1. **Altere** as senhas padrão imediatamente
+2. **Use** senhas fortes para `ADMIN_PASSWORD` e `USER_PASSWORD`
+3. **Gere** uma chave `JWT_SECRET` aleatória e segura
+4. **Configure** `CORS_ORIGIN` adequadamente
+5. **Use** HTTPS em produção
+
+### Geração de Senhas Seguras
+
+```bash
+# Senha aleatória forte
+openssl rand -base64 32
+
+# JWT Secret
+openssl rand -hex 64
 ```
 
-### Atualizações
+## ❗ Troubleshooting
 
+### Container não inicia
 ```bash
-# Atualizar sistema
-git pull
-docker-compose -f docker-compose.prod.yml build --no-cache
-docker-compose -f docker-compose.prod.yml up -d
+# Verificar logs do container
+docker logs sistema-producao_backend_1
 
-# Verificar health
-curl -f http://localhost/api/health
+# Verificar variáveis de ambiente
+docker exec sistema-producao_backend_1 env | grep -E "DOMAIN|BASE_PATH"
 ```
 
-## 🔍 Troubleshooting
+### Endpoints não funcionam
+1. Verificar variáveis `VITE_API_URL` e `VITE_BASE_PATH`
+2. Verificar configuração do nginx principal
+3. Testar health check: `curl seu-dominio.com/scripts/api/health`
 
-### Container Backend não inicia
-```bash
-# Verificar logs
-docker-compose -f docker-compose.prod.yml logs backend
+### Dados não persistem
+1. Verificar se volumes estão sendo criados: `docker volume ls`
+2. Verificar logs do backend para erros de permissão
+3. Verificar espaço em disco do servidor
 
-# Verificar permissões dos volumes
-ls -la data/ scripts/ logs/
+### Configurações não aparecem
+1. Verificar se backend está rodando
+2. Verificar conectividade entre frontend e backend
+3. Verificar se arquivo de configuração foi criado em `/app/data`
 
-# Recriar volumes
-docker-compose -f docker-compose.prod.yml down -v
-docker-compose -f docker-compose.prod.yml up -d
-```
+## ✅ Checklist de Deploy
 
-### Configurações não persistem
-- Verificar se volumes estão mapeados corretamente
-- Verificar se backend está salvando no `/app/data`
-- Verificar logs do backend para erros
-
-### Endpoints incorretos
-- Verificar variáveis `VITE_API_URL` e `VITE_BASE_PATH`
-- Verificar configuração do nginx
-- Testar health check: `curl https://seu-dominio.com/seu-path/api/health`
-
-### Problemas de permissão
-```bash
-# Corrigir permissões
-sudo chown -R $(whoami):$(whoami) data/ scripts/ logs/
-chmod -R 755 data/ scripts/ logs/
-```
-
-## 📋 Checklist de Deploy
-
-- [ ] Configurar variáveis de ambiente
-- [ ] Criar diretórios de volumes no host
-- [ ] Configurar nginx/proxy reverso
-- [ ] Testar health check
-- [ ] Fazer login com usuários padrão
-- [ ] Alterar senhas padrão
-- [ ] Configurar backup automático
-- [ ] Testar upload de scripts
-- [ ] Verificar persistência de configurações
-- [ ] Documentar configurações específicas
+- [ ] Stack criado no Portainer
+- [ ] Variáveis de ambiente configuradas
+- [ ] Senhas alteradas para valores seguros
+- [ ] Nginx principal configurado (se usando subpath)
+- [ ] Health check funcionando
+- [ ] Login com usuários configurados
+- [ ] Upload de scripts funcionando
+- [ ] Configurações sendo persistidas
+- [ ] Acessível de diferentes computadores
+- [ ] Backup configurado
 
 ---
 
-**Importante:** Este sistema foi projetado para ser totalmente independente e auto-configurável. Todas as configurações ficam centralizadas no backend e são acessíveis de qualquer computador.
+**🎉 Pronto!** Seu sistema está completamente independente e funcional em produção, acessível de qualquer computador sem dependências locais.
