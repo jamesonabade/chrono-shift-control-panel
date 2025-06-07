@@ -1,8 +1,13 @@
 
 import { useState, useEffect } from 'react';
 import { serverApi } from '@/lib/api';
+import { cn } from '@/lib/utils';
 
-export default function DateTime() {
+interface DateTimeProps {
+  className?: string;
+}
+
+export default function DateTime({ className }: DateTimeProps) {
   const [dateTime, setDateTime] = useState(new Date());
   const [serverTime, setServerTime] = useState<string | null>(null);
   const [lastSync, setLastSync] = useState<Date | null>(null);
@@ -52,7 +57,7 @@ export default function DateTime() {
   };
 
   return (
-    <div className="flex flex-col items-end text-sm text-gray-600 dark:text-gray-400">
+    <div className={cn("flex flex-col items-end text-sm text-gray-600 dark:text-gray-400", className)}>
       <div className="font-mono">
         {formatDateTime(dateTime)}
       </div>
